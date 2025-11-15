@@ -1,0 +1,65 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Edit Branch</h2>
+                <p class="mt-1 text-sm text-gray-500">Update branch information.</p>
+            </div>
+        </div>
+    </x-slot>
+
+    <div class="py-10">
+        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
+            <form method="POST" action="{{ route('branches.update', $branch) }}" class="space-y-6">
+                @csrf
+                @method('PUT')
+
+                <div class="bg-white shadow-sm sm:rounded-lg border border-gray-100 p-6 space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <x-input-label for="name" value="Branch Name *" />
+                            <x-text-input id="name" name="name" type="text" value="{{ old('name', $branch->name) }}" class="mt-1 block w-full" required />
+                            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <x-input-label for="code" value="Branch Code" />
+                            <x-text-input id="code" name="code" type="text" value="{{ old('code', $branch->code) }}" class="mt-1 block w-full" placeholder="e.g., CC, MC, SZ" />
+                            <x-input-error :messages="$errors->get('code')" class="mt-2" />
+                            <p class="mt-1 text-xs text-gray-500">Unique code for this branch (optional)</p>
+                        </div>
+
+                        <div>
+                            <x-input-label for="contact_number" value="Contact Number" />
+                            <x-text-input id="contact_number" name="contact_number" type="text" value="{{ old('contact_number', $branch->contact_number) }}" class="mt-1 block w-full" placeholder="e.g., +91XXXXXXXXXX" />
+                            <x-input-error :messages="$errors->get('contact_number')" class="mt-2" />
+                            <p class="mt-1 text-xs text-gray-500">Branch contact number (optional)</p>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <x-input-label for="address" value="Address" />
+                            <textarea id="address" name="address" rows="3" class="mt-1 block w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Branch address (optional)">{{ old('address', $branch->address) }}</textarea>
+                            <x-input-error :messages="$errors->get('address')" class="mt-2" />
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $branch->is_active)) class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm text-gray-700">Active</span>
+                            </label>
+                            <p class="mt-1 text-xs text-gray-500">Only active branches will appear in student enrollment forms</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3">
+                        <a href="{{ route('branches.index') }}" class="px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                            Cancel
+                        </a>
+                        <x-primary-button>Update Branch</x-primary-button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</x-app-layout>
+
