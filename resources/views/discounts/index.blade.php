@@ -68,15 +68,19 @@
                                     </td>
                                     <td class="px-4 py-3">
                                         @if($discount->status === 'pending')
-                                            <form method="POST" action="{{ route('discounts.update', $discount) }}" class="space-y-2">
-                                                @csrf
-                                                @method('PUT')
-                                                <textarea name="decision_notes" rows="2" class="w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs" placeholder="Decision notes (optional)"></textarea>
-                                                <div class="flex items-center gap-2">
-                                                    <button name="decision" value="approved" class="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">Approve</button>
-                                                    <button name="decision" value="rejected" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700">Reject</button>
-                                                </div>
-                                            </form>
+                                            @can('approve-discounts')
+                                                <form method="POST" action="{{ route('discounts.update', $discount) }}" class="space-y-2">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <textarea name="decision_notes" rows="2" class="w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs" placeholder="Decision notes (optional)"></textarea>
+                                                    <div class="flex items-center gap-2">
+                                                        <button name="decision" value="approved" class="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">Approve</button>
+                                                        <button name="decision" value="rejected" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700">Reject</button>
+                                                    </div>
+                                                </form>
+                                            @else
+                                                <div class="text-xs text-gray-500 italic">No permission to approve</div>
+                                            @endcan
                                         @else
                                             <div class="text-xs text-gray-500 space-y-1">
                                                 <div>Updated {{ $discount->approved_at?->format('d M Y H:i') ?? '—' }}</div>

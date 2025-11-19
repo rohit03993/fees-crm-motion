@@ -27,6 +27,8 @@ class RescheduleApprovalController extends Controller
 
     public function update(HandleRescheduleDecisionRequest $request, Reschedule $reschedule): RedirectResponse
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $data = $request->validated();
 
         if ($data['decision'] === 'approved') {

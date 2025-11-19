@@ -27,6 +27,8 @@ class DiscountApprovalController extends Controller
 
     public function update(HandleDiscountDecisionRequest $request, Discount $discount): RedirectResponse
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $data = $request->validated();
 
         if ($data['decision'] === 'approved') {
