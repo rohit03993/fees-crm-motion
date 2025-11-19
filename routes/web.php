@@ -19,25 +19,40 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Dashboard - accessible to all authenticated users
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// Staff routes - Staff and Admin can access
+Route::middleware(['auth', 'verified', 'staff'])->group(function () {
+    // Student management
     Route::resource('students', StudentController::class)->only(['index', 'create', 'store', 'show']);
+    
+    // Payment operations
     Route::post('students/{student}/payments', [PaymentController::class, 'store'])->name('students.payments.store');
     Route::post('students/{student}/installments/{installment}/create-remaining', [PaymentController::class, 'createRemainingInstallment'])->name('students.installments.create-remaining');
+    
+    // Reschedule requests (staff can create, admin approves)
     Route::post('students/{student}/reschedules', [RescheduleController::class, 'store'])->name('students.reschedules.store');
+    
+    // Discount requests (staff can create, admin approves)
     Route::post('students/{student}/discounts', [DiscountController::class, 'store'])->name('students.discounts.store');
+});
 
+// Admin-only routes - Only Admin can access
+Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+    // Settings management
     Route::get('/settings/penalties', [PenaltySettingsController::class, 'edit'])->name('settings.penalties.edit');
     Route::put('/settings/penalties', [PenaltySettingsController::class, 'update'])->name('settings.penalties.update');
     Route::delete('/settings/clear-students', [PenaltySettingsController::class, 'clearAllStudents'])->name('settings.clear-students');
 
+    // Approval workflows
     Route::get('reschedules', [RescheduleApprovalController::class, 'index'])->name('reschedules.index');
     Route::put('reschedules/{reschedule}', [RescheduleApprovalController::class, 'update'])->name('reschedules.update');
 
     Route::get('discounts', [DiscountApprovalController::class, 'index'])->name('discounts.index');
     Route::put('discounts/{discount}', [DiscountApprovalController::class, 'update'])->name('discounts.update');
 
+    // Master data management
     Route::resource('banks', BankController::class)->except(['show']);
     Route::resource('courses', CourseController::class)->except(['show']);
     Route::resource('branches', BranchController::class)->except(['show']);

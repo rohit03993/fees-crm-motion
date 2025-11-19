@@ -220,15 +220,17 @@
                 <div class="relative z-10 flex flex-col gap-6">
                     <!-- Top Section: Photos and Guardian Info -->
                     <div class="flex flex-col md:flex-row items-start gap-6 pb-4 border-b border-white/20">
-                        <!-- Student Photo - Square Passport Size -->
+                        <!-- Student Photo - Passport Size (Portrait) -->
                         <div class="flex flex-col items-center gap-2">
-                            <div class="w-28 h-28 bg-white rounded-lg shadow-xl border-4 border-white/40 overflow-hidden flex items-center justify-center">
+                            <div class="w-24 h-32 rounded-lg shadow-xl border-4 border-white/40 overflow-hidden relative bg-white">
                                 @if($student->student_photo)
-                                    <img src="{{ Storage::url($student->student_photo) }}" alt="Student Photo" class="w-full h-full object-cover object-center" />
+                                    <img src="{{ url(Storage::url($student->student_photo)) }}" alt="Student Photo" class="w-full h-full object-cover object-center m-0 p-0 block" />
                                 @else
-                                    <svg class="w-14 h-14 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
+                                    <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                        <svg class="w-12 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                    </div>
                                 @endif
                             </div>
                             <p class="text-xs text-center text-indigo-100/90 font-semibold">Student</p>
@@ -242,13 +244,15 @@
                             <!-- Guardian 1 -->
                             @if($student->guardian_1_name)
                                 <div class="flex flex-col items-center gap-2">
-                                    <div class="w-28 h-28 bg-white rounded-lg shadow-xl border-4 border-white/40 overflow-hidden flex items-center justify-center">
+                                    <div class="w-24 h-32 rounded-lg shadow-xl border-4 border-white/40 overflow-hidden relative bg-white">
                                         @if($student->guardian_1_photo)
-                                            <img src="{{ Storage::url($student->guardian_1_photo) }}" alt="Guardian 1" class="w-full h-full object-cover object-center" />
+                                            <img src="{{ url(Storage::url($student->guardian_1_photo)) }}" alt="Guardian 1" class="w-full h-full object-cover object-center m-0 p-0 block" />
                                         @else
-                                            <svg class="w-14 h-14 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                            </svg>
+                                            <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                                <svg class="w-12 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                </svg>
+                                            </div>
                                         @endif
                                     </div>
                                     <p class="text-xs text-center text-indigo-100/90 font-semibold">Guardian 1</p>
@@ -262,13 +266,15 @@
                             <!-- Guardian 2 -->
                             @if($student->guardian_2_name)
                                 <div class="flex flex-col items-center gap-2">
-                                    <div class="w-28 h-28 bg-white rounded-lg shadow-xl border-4 border-white/40 overflow-hidden flex items-center justify-center">
+                                    <div class="w-24 h-32 rounded-lg shadow-xl border-4 border-white/40 overflow-hidden relative bg-white">
                                         @if($student->guardian_2_photo)
-                                            <img src="{{ Storage::url($student->guardian_2_photo) }}" alt="Guardian 2" class="w-full h-full object-cover object-center" />
+                                            <img src="{{ url(Storage::url($student->guardian_2_photo)) }}" alt="Guardian 2" class="w-full h-full object-cover object-center m-0 p-0 block" />
                                         @else
-                                            <svg class="w-14 h-14 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                            </svg>
+                                            <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                                <svg class="w-12 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                </svg>
+                                            </div>
                                         @endif
                                     </div>
                                     <p class="text-xs text-center text-indigo-100/90 font-semibold">Guardian 2</p>
@@ -449,83 +455,6 @@
                                 </div>
                             @endif
                         </div>
-                    </div>
-                </div>
-            </section>
-
-            <div class="relative z-10 mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="rounded-2xl bg-white/15 p-4 backdrop-blur">
-                        <p class="text-xs uppercase tracking-wide text-indigo-100/80">Program Fee</p>
-                        @if($approvedDiscountTotal > 0)
-                            <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($totalProgramFee, 2) }}</p>
-                            <p class="mt-1 text-xs text-indigo-100/70 italic">After discounts</p>
-                            <div class="mt-2 space-y-1 border-t border-white/20 pt-2">
-                                <p class="text-sm text-indigo-100/95">
-                                    <span class="font-medium">Original (when added):</span> <span class="font-bold text-base">₹{{ number_format($originalProgramFee, 2) }}</span>
-                                </p>
-                                <p class="text-xs text-emerald-200/90">
-                                    <span class="font-medium">Discounts:</span> {{ $approvedDiscountsCount }} given
-                                </p>
-                                <p class="text-xs text-emerald-200/80">
-                                    Total: -₹{{ number_format($approvedDiscountTotal, 2) }}
-                                </p>
-                            </div>
-                        @else
-                            <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($totalProgramFee, 2) }}</p>
-                            <p class="mt-1 text-xs text-indigo-100/70 italic">Original (when added)</p>
-                        @endif
-                    </div>
-                    <div class="rounded-2xl bg-white/15 p-4 backdrop-blur">
-                        <p class="text-xs uppercase tracking-wide text-indigo-100/80">Cash Allowance</p>
-                        <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($originalCashAllowance, 2) }}</p>
-                        <p class="mt-1 text-xs text-indigo-100/70 italic">Promised</p>
-                        <div class="mt-2 space-y-1 border-t border-white/20 pt-2">
-                            <p class="text-xs text-indigo-100/90">
-                                <span class="font-medium">Remaining:</span> ₹{{ number_format($remainingCashAllowance, 2) }}
-                            </p>
-                            @if($totalCashPayments > 0)
-                                <p class="text-xs text-indigo-100/70">
-                                    <span class="font-medium">Used:</span> ₹{{ number_format($totalCashPayments, 2) }}
-                                </p>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="rounded-2xl bg-white/15 p-4 backdrop-blur">
-                        <p class="text-xs uppercase tracking-wide text-indigo-100/80">Online Allowance</p>
-                        @if($approvedDiscountTotal > 0)
-                            <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($onlineAllowance, 2) }}</p>
-                            <p class="mt-1 text-xs text-indigo-100/70 italic">After discount</p>
-                            <div class="mt-2 space-y-1 border-t border-white/20 pt-2">
-                                <p class="text-sm text-indigo-100/95">
-                                    <span class="font-medium">Original (when added):</span> <span class="font-bold text-base">₹{{ number_format($originalOnlineAllowance, 2) }}</span>
-                                </p>
-                                <p class="text-xs text-indigo-100/90">
-                                    <span class="font-medium">Remaining:</span> ₹{{ number_format($remainingOnlineAllowance, 2) }}
-                                </p>
-                                @if($totalOnlinePayments > 0)
-                                    <p class="text-xs text-indigo-100/70">
-                                        <span class="font-medium">Used:</span> ₹{{ number_format($totalOnlinePayments, 2) }}
-                                    </p>
-                                @endif
-                            </div>
-                        @else
-                            <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($onlineAllowance, 2) }}</p>
-                            <p class="mt-1 text-xs text-indigo-100/70 italic">Promised</p>
-                            <div class="mt-2 space-y-1 border-t border-white/20 pt-2">
-                                <p class="text-xs text-indigo-100/90">
-                                    <span class="font-medium">Remaining:</span> ₹{{ number_format($remainingOnlineAllowance, 2) }}
-                                </p>
-                                @if($totalOnlinePayments > 0)
-                                    <p class="text-xs text-indigo-100/70">
-                                        <span class="font-medium">Used:</span> ₹{{ number_format($totalOnlinePayments, 2) }}
-                                    </p>
-                                @endif
-                            </div>
-                        @endif
-                    </div>
-                    <div class="rounded-2xl bg-white/15 p-4 backdrop-blur">
-                        <p class="text-xs uppercase tracking-wide text-indigo-100/80">Penalties Accrued</p>
-                        <p class="mt-1 text-lg font-semibold text-white">₹{{ number_format($penaltyTotal, 2) }}</p>
                     </div>
                 </div>
             </section>
@@ -1174,19 +1103,16 @@
                             <div class="accordion-content hidden px-6 pb-6">
                                 <div class="grid gap-3 sm:grid-cols-2 pt-4">
                                     <div class="rounded-xl bg-slate-50 p-4">
-                                        <p class="text-xs uppercase tracking-wide text-slate-500">Program Fee</p>
-                                        <p class="mt-1 text-lg font-semibold text-slate-900">₹{{ number_format($totalProgramFee, 2) }}</p>
+                                        <p class="text-lg font-semibold text-slate-900">₹{{ number_format($totalProgramFee, 2) }}</p>
                                         @if($approvedDiscountTotal > 0)
                                             <p class="mt-1 text-xs text-emerald-600">Discount applied: -₹{{ number_format($approvedDiscountTotal, 2) }}</p>
                                         @endif
                                     </div>
                                     <div class="rounded-xl bg-slate-50 p-4">
-                                        <p class="text-xs uppercase tracking-wide text-slate-500">Cash Allowance</p>
-                                        <p class="mt-1 text-lg font-semibold text-slate-900">₹{{ number_format($originalCashAllowance, 2) }}</p>
-                                        <p class="mt-0.5 text-xs text-slate-500 italic">Promised</p>
+                                        <p class="text-lg font-semibold text-slate-900">₹{{ number_format($originalCashAllowance, 2) }}</p>
                                         <div class="mt-2 space-y-1 border-t border-slate-200 pt-2">
                                             <p class="text-xs text-slate-700 font-medium">
-                                                <span class="font-semibold">Remaining:</span> ₹{{ number_format($remainingCashAllowance, 2) }}
+                                                ₹{{ number_format($remainingCashAllowance, 2) }}
                                             </p>
                                             @if($totalCashPayments > 0)
                                                 <p class="text-xs text-slate-500">
@@ -1196,9 +1122,7 @@
                                         </div>
                                     </div>
                                     <div class="rounded-xl bg-slate-50 p-4">
-                                        <p class="text-xs uppercase tracking-wide text-slate-500">Online Allowance</p>
-                                        <p class="mt-1 text-lg font-semibold text-slate-900">₹{{ number_format($originalOnlineAllowance, 2) }}</p>
-                                        <p class="mt-0.5 text-xs text-slate-500 italic">Promised</p>
+                                        <p class="text-lg font-semibold text-slate-900">₹{{ number_format($originalOnlineAllowance, 2) }}</p>
                                         @if($approvedDiscountTotal > 0)
                                             <p class="mt-0.5 text-xs text-amber-600 italic">
                                                 After discount: ₹{{ number_format($onlineAllowance, 2) }}
@@ -1206,7 +1130,7 @@
                                         @endif
                                         <div class="mt-2 space-y-1 border-t border-slate-200 pt-2">
                                             <p class="text-xs text-slate-700 font-medium">
-                                                <span class="font-semibold">Remaining:</span> ₹{{ number_format($remainingOnlineAllowance, 2) }}
+                                                ₹{{ number_format($remainingOnlineAllowance, 2) }}
                                             </p>
                                             @if($totalOnlinePayments > 0)
                                                 <p class="text-xs text-slate-500">
@@ -1216,8 +1140,7 @@
                                         </div>
                                     </div>
                                     <div class="rounded-xl bg-slate-50 p-4">
-                                        <p class="text-xs uppercase tracking-wide text-slate-500">Penalty Accrued</p>
-                                        <p class="mt-1 text-lg font-semibold text-slate-900">₹{{ number_format($penaltyTotal, 2) }}</p>
+                                        <p class="text-lg font-semibold text-slate-900">₹{{ number_format($penaltyTotal, 2) }}</p>
                                     </div>
                                     <div class="rounded-xl bg-slate-50 p-4">
                                         <p class="text-xs uppercase tracking-wide text-slate-500">Installments Planned</p>
