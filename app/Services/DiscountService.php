@@ -14,11 +14,18 @@ class DiscountService
 {
     public function requestDiscount(Student $student, array $data): Discount
     {
-        $this->ensureAmountIsValid($student, $data['amount']);
+        // Validate installment belongs to student and get installment details
+        $installment = \App\Models\Installment::where('id', $data['installment_id'])
+            ->whereHas('fee.student', fn($q) => $q->where('id', $student->id))
+            ->firstOrFail();
+
+        // Validate discount amount against installment's unpaid amount
+        $this->ensureAmountIsValidForInstallment($installment, $data['amount']);
 
         return DB::transaction(function () use ($student, $data) {
             $discount = Discount::create([
                 'student_id' => $student->id,
+                'installment_id' => $data['installment_id'],
                 'amount' => $data['amount'],
                 'reason' => $data['reason'],
                 'document_path' => $this->storeDocument($data['document'] ?? null),
@@ -56,8 +63,8 @@ class DiscountService
             $discount->approved_at = now();
             $discount->save();
 
-            // Apply discount to installments
-            $this->applyDiscountToInstallments($discount->student, $discount->amount);
+            // Apply discount to the specific installment
+            $this->applyDiscountToInstallments($discount->student, $discount->amount, $discount->installment_id);
 
             $this->logWhatsappDecision($discount, 'approved');
 
@@ -66,78 +73,33 @@ class DiscountService
     }
 
     /**
-     * Apply approved discount to student's installments, online allowance, and total fee
+     * Apply approved discount to the specific installment
      * IMPORTANT: Discounts are applied ONLY to online_allowance to avoid GST penalties
      */
-    private function applyDiscountToInstallments(Student $student, float $discountAmount): void
+    private function applyDiscountToInstallments(Student $student, float $discountAmount, int $installmentId): void
     {
         $fee = $student->fee;
         if (!$fee) {
             return;
         }
 
+        $installment = \App\Models\Installment::where('id', $installmentId)
+            ->where('student_fee_id', $fee->id)
+            ->firstOrFail();
+
         $originalTotalFee = $fee->total_fee;
-        $originalCashAllowance = $fee->cash_allowance ?? 0;
         $originalOnlineAllowance = $fee->online_allowance ?? 0;
 
         // Apply discount ONLY to online_allowance (cash_allowance remains unchanged)
         // This prevents GST penalties when discounts are given
         $fee->online_allowance = max(0, $originalOnlineAllowance - $discountAmount);
         
-        // Cash allowance remains unchanged
-        // No need to update it as discounts only affect online allowance
-
-        // Get all unpaid installments (where amount > paid_amount)
-        $unpaidInstallments = $fee->installments()
-            ->whereRaw('amount > paid_amount')
-            ->orderBy('installment_number')
-            ->get();
-
-        if ($unpaidInstallments->isEmpty()) {
-            // If all installments are paid, reduce the total fee only
-            $fee->total_fee = max(0, $originalTotalFee - $discountAmount);
-            $fee->save();
-            return;
-        }
-
-        // Calculate total unpaid amount
-        $totalUnpaidAmount = $unpaidInstallments->sum(function ($installment) {
-            return $installment->amount - $installment->paid_amount;
-        });
-
-        if ($totalUnpaidAmount <= 0) {
-            // Update total_fee and allowances even if no unpaid installments
-            $fee->total_fee = max(0, $originalTotalFee - $discountAmount);
-            $fee->save();
-            return;
-        }
-
-        // Apply discount proportionally to each unpaid installment
-        $remainingDiscount = $discountAmount;
-        $installments = $unpaidInstallments->values();
-
-        foreach ($installments as $index => $installment) {
-            $unpaidAmount = $installment->amount - $installment->paid_amount;
-            
-            if ($remainingDiscount <= 0) {
-                break;
-            }
-
-            // Calculate proportional discount for this installment
-            $proportionalDiscount = ($unpaidAmount / $totalUnpaidAmount) * $discountAmount;
-            
-            // For the last installment, apply any remaining discount to avoid rounding issues
-            if ($index === $installments->count() - 1) {
-                $proportionalDiscount = $remainingDiscount;
-            }
-
-            // Reduce installment amount (but don't go below paid_amount)
-            $newAmount = max($installment->paid_amount, $installment->amount - $proportionalDiscount);
-            $installment->amount = $newAmount;
-            $installment->save();
-
-            $remainingDiscount -= $proportionalDiscount;
-        }
+        // Apply discount to the specific installment
+        // Reduce installment amount (but don't go below paid_amount)
+        $unpaidAmount = $installment->amount - $installment->paid_amount;
+        $newAmount = max($installment->paid_amount, $installment->amount - $discountAmount);
+        $installment->amount = $newAmount;
+        $installment->save();
 
         // Update total_fee to reflect the discount
         $fee->total_fee = max(0, $originalTotalFee - $discountAmount);
@@ -165,20 +127,40 @@ class DiscountService
         });
     }
 
-    private function ensureAmountIsValid(Student $student, float $amount): void
+    private function ensureAmountIsValidForInstallment(\App\Models\Installment $installment, float $amount): void
     {
-        $totalFee = optional($student->fee)->total_fee ?? 0;
-        $existingApproved = $student->discounts()->where('status', 'approved')->sum('amount');
-
         if ($amount <= 0) {
             throw ValidationException::withMessages([
                 'amount' => 'Discount amount must be greater than zero.',
             ]);
         }
 
-        if ($amount + $existingApproved > $totalFee) {
+        // Calculate unpaid amount for this installment
+        $unpaidAmount = $installment->amount - $installment->paid_amount;
+
+        if ($unpaidAmount <= 0) {
             throw ValidationException::withMessages([
-                'amount' => 'Discount amount exceeds total program fee.',
+                'installment_id' => 'This installment is already fully paid. Cannot apply discount.',
+            ]);
+        }
+
+        // Check if discount amount exceeds unpaid amount
+        if ($amount > $unpaidAmount) {
+            throw ValidationException::withMessages([
+                'amount' => 'Discount amount (₹' . number_format($amount, 2) . ') cannot exceed the unpaid amount (₹' . number_format($unpaidAmount, 2) . ') for this installment.',
+            ]);
+        }
+
+        // Check for existing approved discounts on this installment
+        $existingApprovedDiscounts = \App\Models\Discount::where('installment_id', $installment->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        $remainingUnpaidAfterExistingDiscounts = $unpaidAmount - $existingApprovedDiscounts;
+
+        if ($amount > $remainingUnpaidAfterExistingDiscounts) {
+            throw ValidationException::withMessages([
+                'amount' => 'Discount amount (₹' . number_format($amount, 2) . ') exceeds the remaining unpaid amount (₹' . number_format($remainingUnpaidAfterExistingDiscounts, 2) . ') after existing discounts.',
             ]);
         }
     }

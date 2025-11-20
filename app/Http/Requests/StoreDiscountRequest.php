@@ -14,6 +14,7 @@ class StoreDiscountRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'installment_id' => ['required', 'exists:installments,id'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
             'document' => ['nullable', 'file', 'max:2048', 'mimes:pdf,jpg,jpeg,png'],
@@ -23,6 +24,8 @@ class StoreDiscountRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'installment_id.required' => 'Please select an installment.',
+            'installment_id.exists' => 'The selected installment is invalid.',
             'amount.required' => 'Discount amount is required.',
             'amount.numeric' => 'Discount amount must be a valid number.',
             'amount.min' => 'Discount amount must be at least ₹0.01.',

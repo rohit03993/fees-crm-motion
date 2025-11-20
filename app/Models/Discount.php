@@ -12,6 +12,7 @@ class Discount extends Model
 
     protected $fillable = [
         'student_id',
+        'installment_id',
         'amount',
         'reason',
         'document_path',
@@ -36,6 +37,14 @@ class Discount extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    /**
+     * Get the installment this discount applies to
+     */
+    public function installment(): BelongsTo
+    {
+        return $this->belongsTo(Installment::class);
     }
 
     /**

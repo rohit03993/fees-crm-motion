@@ -486,6 +486,13 @@
                                             $remainingAmount = max(0, $installment->amount - $installment->paid_amount);
                                             $hasRemaining = $remainingAmount > 0.01 && $installment->status === 'partially_paid';
                                             $showOriginal = $originalAmount != $installment->amount && $installment->status === 'partially_paid';
+                                            // Get approved discounts for this installment
+                                            $installmentDiscounts = $student->discounts()
+                                                ->where('installment_id', $installment->id)
+                                                ->where('status', 'approved')
+                                                ->get();
+                                            $totalDiscountAmount = $installmentDiscounts->sum('amount');
+                                            $hasDiscount = $totalDiscountAmount > 0;
                                         @endphp
                                         <tr class="bg-white {{ $hasRemaining ? 'bg-amber-50/30' : '' }}">
                                             <td class="px-4 py-3 font-semibold text-gray-700">{{ $installment->installment_number }}</td>
@@ -496,6 +503,9 @@
                                                         <div class="text-xs text-gray-500 line-through">Original: ₹{{ number_format($originalAmount, 2) }}</div>
                                                     @endif
                                                     <div class="text-gray-900 font-semibold">₹{{ number_format($installment->amount, 2) }}</div>
+                                                    @if($hasDiscount)
+                                                        <div class="text-xs text-emerald-600 font-medium">Discount: -₹{{ number_format($totalDiscountAmount, 2) }}</div>
+                                                    @endif
                                                     @if($installment->paid_amount > 0)
                                                         <div class="text-xs text-emerald-600">Paid: ₹{{ number_format($installment->paid_amount, 2) }}</div>
                                                     @endif
@@ -1592,7 +1602,9 @@
                                 </svg>
                             </button>
                             @php
-                                $hasDiscountErrors = $errors->has('amount') || $errors->has('reason') || $errors->has('document');
+                                $hasDiscountErrors = $errors->has('installment_id') || $errors->has('amount') || $errors->has('reason') || $errors->has('document');
+                                // Get unpaid installments for discount selection (same as reschedulable)
+                                $discountableInstallments = $reschedulableInstallments;
                             @endphp
                             <div class="accordion-content px-6 pb-6 {{ $hasDiscountErrors ? '' : 'hidden' }}" id="discount-accordion-content">
                                 <div class="pt-4">
@@ -1604,37 +1616,135 @@
                                     
                                     <form method="POST" action="{{ route('students.discounts.store', $student) }}" enctype="multipart/form-data" class="space-y-4" id="discount-form">
                                         @csrf
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <x-input-label for="discount_amount" value="Discount Amount (₹) *" />
-                                                <x-text-input id="discount_amount" name="amount" type="number" min="0.01" step="0.01" class="mt-1 block w-full {{ $errors->has('amount') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" value="{{ old('amount') }}" required />
-                                                <x-input-error :messages="$errors->get('amount')" class="mt-2" />
-                                                @php
-                                                    $approvedDiscountTotal = $student->discounts()->where('status', 'approved')->sum('amount');
-                                                    $maxDiscount = max(0, (optional($student->fee)->total_fee ?? 0) - $approvedDiscountTotal);
-                                                @endphp
-                                                <p class="mt-1 text-xs text-gray-500">Maximum allowed: ₹<span id="max-discount-amount">{{ number_format($maxDiscount, 2) }}</span></p>
-                                            </div>
-                                            <div>
-                                                <x-input-label for="discount_document" value="Supporting Document" />
-                                                <input id="discount_document" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" class="mt-2 block w-full text-sm text-gray-600 border border-gray-300 rounded-lg p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
-                                                <p class="mt-1 text-xs text-gray-500">Optional. Max size 2MB. Formats: PDF, JPG, JPEG, PNG</p>
-                                                <x-input-error :messages="$errors->get('document')" class="mt-2" />
+                                        
+                                        <!-- Step 1: Select Installment -->
+                                        <div class="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-4">
+                                            <x-input-label for="discount_installment_id" value="Select Installment *" class="text-base font-semibold text-indigo-900" />
+                                            <select id="discount_installment_id" name="installment_id" class="mt-2 block w-full rounded-lg border-indigo-300 bg-white text-base font-medium focus:border-indigo-500 focus:ring-indigo-500 {{ $errors->has('installment_id') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" required>
+                                                <option value="">-- Select an installment --</option>
+                                                @foreach($discountableInstallments as $installment)
+                                                    @php
+                                                        $unpaidAmount = $installment->amount - $installment->paid_amount;
+                                                        // Calculate existing approved discounts on this installment
+                                                        $existingDiscounts = $student->discounts()
+                                                            ->where('installment_id', $installment->id)
+                                                            ->where('status', 'approved')
+                                                            ->sum('amount');
+                                                        $availableForDiscount = $unpaidAmount - $existingDiscounts;
+                                                    @endphp
+                                                    <option value="{{ $installment->id }}" 
+                                                        data-installment-amount="{{ $installment->amount }}"
+                                                        data-paid-amount="{{ $installment->paid_amount }}"
+                                                        data-unpaid-amount="{{ $unpaidAmount }}"
+                                                        data-existing-discounts="{{ $existingDiscounts }}"
+                                                        data-available-for-discount="{{ $availableForDiscount }}"
+                                                        @selected(old('installment_id') == $installment->id)>
+                                                        Installment #{{ $installment->installment_number }} &mdash; Due {{ $installment->due_date->format('d M Y') }} &middot; Amount: ₹{{ number_format($installment->amount, 2) }} &middot; Outstanding: ₹{{ number_format($unpaidAmount, 2) }}
+                                                        @if($existingDiscounts > 0)
+                                                            (Discounts: ₹{{ number_format($existingDiscounts, 2) }})
+                                                        @endif
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <x-input-error :messages="$errors->get('installment_id')" class="mt-2" />
+                                            <p class="mt-2 text-sm text-indigo-700">Select the installment for which you want to request a discount.</p>
+                                        </div>
+
+                                        <!-- Step 2: Discount Amount (shown after installment selection) -->
+                                        <div id="discount-amount-section" class="hidden rounded-lg border-2 border-emerald-200 bg-emerald-50 p-4">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <x-input-label for="discount_amount" value="Discount Amount (₹) *" class="text-base font-semibold text-emerald-900" />
+                                                    <x-text-input id="discount_amount" name="amount" type="number" min="0.01" step="0.01" class="mt-2 block w-full rounded-lg border-emerald-300 bg-white text-base font-medium focus:border-emerald-500 focus:ring-emerald-500 {{ $errors->has('amount') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" value="{{ old('amount') }}" required />
+                                                    <x-input-error :messages="$errors->get('amount')" class="mt-2" />
+                                                    <p class="mt-2 text-sm text-emerald-700">
+                                                        Installment amount: ₹<span id="selected-installment-amount">0.00</span><br>
+                                                        Outstanding: ₹<span id="selected-unpaid-amount">0.00</span><br>
+                                                        <span id="existing-discounts-display" class="hidden">Existing discounts: ₹<span id="selected-existing-discounts">0.00</span><br></span>
+                                                        Maximum discount allowed: ₹<span id="max-discount-amount" class="font-semibold">0.00</span>
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <x-input-label for="discount_document" value="Supporting Document" class="text-base font-semibold text-emerald-900" />
+                                                    <input id="discount_document" name="document" type="file" accept=".pdf,.jpg,.jpeg,.png" class="mt-2 block w-full text-sm text-gray-600 border border-emerald-300 rounded-lg p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
+                                                    <p class="mt-2 text-sm text-emerald-700">Optional. Max size 2MB. Formats: PDF, JPG, JPEG, PNG</p>
+                                                    <x-input-error :messages="$errors->get('document')" class="mt-2" />
+                                                </div>
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <x-input-label for="discount_reason" value="Reason *" />
-                                            <textarea id="discount_reason" name="reason" rows="4" class="mt-1 block w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 {{ $errors->has('reason') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" placeholder="Explain why this discount is requested (minimum 10 characters required)" required minlength="10" maxlength="500">{{ old('reason') }}</textarea>
-                                            <x-input-error :messages="$errors->get('reason')" class="mt-2" />
-                                            <p class="mt-1 text-xs">
-                                                <span id="reason-char-count" class="font-medium">{{ strlen(old('reason', '')) }}</span>/500 characters 
-                                                <span id="reason-min-warning" class="text-red-600 {{ strlen(old('reason', '')) >= 10 ? 'hidden' : '' }}">(minimum 10 characters required)</span>
-                                                <span id="reason-ok" class="text-green-600 {{ strlen(old('reason', '')) >= 10 ? '' : 'hidden' }}">✓</span>
-                                            </p>
+                                        <!-- Step 3: Reason (shown after installment selection) -->
+                                        <div id="discount-reason-section" class="hidden">
+                                            <div>
+                                                <x-input-label for="discount_reason" value="Reason *" />
+                                                <textarea id="discount_reason" name="reason" rows="4" class="mt-1 block w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 {{ $errors->has('reason') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" placeholder="Explain why this discount is requested for the selected installment (minimum 10 characters required)" required minlength="10" maxlength="500">{{ old('reason') }}</textarea>
+                                                <x-input-error :messages="$errors->get('reason')" class="mt-2" />
+                                                <p class="mt-1 text-xs">
+                                                    <span id="reason-char-count" class="font-medium">{{ strlen(old('reason', '')) }}</span>/500 characters 
+                                                    <span id="reason-min-warning" class="text-red-600 {{ strlen(old('reason', '')) >= 10 ? 'hidden' : '' }}">(minimum 10 characters required)</span>
+                                                    <span id="reason-ok" class="text-green-600 {{ strlen(old('reason', '')) >= 10 ? '' : 'hidden' }}">✓</span>
+                                                </p>
+                                            </div>
                                         </div>
 
                                         <script>
+                                            // Installment selection handler for discount form
+                                            (function() {
+                                                const installmentSelect = document.getElementById('discount_installment_id');
+                                                const amountSection = document.getElementById('discount-amount-section');
+                                                const reasonSection = document.getElementById('discount-reason-section');
+                                                const amountInput = document.getElementById('discount_amount');
+                                                const maxAmountSpan = document.getElementById('max-discount-amount');
+                                                const installmentAmountSpan = document.getElementById('selected-installment-amount');
+                                                const unpaidAmountSpan = document.getElementById('selected-unpaid-amount');
+                                                const existingDiscountsSpan = document.getElementById('selected-existing-discounts');
+                                                const existingDiscountsDisplay = document.getElementById('existing-discounts-display');
+
+                                                if (installmentSelect && amountSection && reasonSection) {
+                                                    function handleInstallmentChange() {
+                                                        const selectedOption = installmentSelect.options[installmentSelect.selectedIndex];
+                                                        
+                                                        if (selectedOption.value) {
+                                                            const installmentAmount = parseFloat(selectedOption.dataset.installmentAmount || 0);
+                                                            const paidAmount = parseFloat(selectedOption.dataset.paidAmount || 0);
+                                                            const unpaidAmount = parseFloat(selectedOption.dataset.unpaidAmount || 0);
+                                                            const existingDiscounts = parseFloat(selectedOption.dataset.existingDiscounts || 0);
+                                                            const availableForDiscount = parseFloat(selectedOption.dataset.availableForDiscount || 0);
+
+                                                            // Update display
+                                                            installmentAmountSpan.textContent = installmentAmount.toFixed(2);
+                                                            unpaidAmountSpan.textContent = unpaidAmount.toFixed(2);
+                                                            if (existingDiscounts > 0 && existingDiscountsSpan && existingDiscountsDisplay) {
+                                                                existingDiscountsSpan.textContent = existingDiscounts.toFixed(2);
+                                                                existingDiscountsDisplay.classList.remove('hidden');
+                                                            } else if (existingDiscountsDisplay) {
+                                                                existingDiscountsDisplay.classList.add('hidden');
+                                                            }
+                                                            maxAmountSpan.textContent = availableForDiscount.toFixed(2);
+
+                                                            // Set max attribute on amount input
+                                                            amountInput.setAttribute('max', availableForDiscount.toFixed(2));
+
+                                                            // Show amount and reason sections
+                                                            amountSection.classList.remove('hidden');
+                                                            reasonSection.classList.remove('hidden');
+                                                        } else {
+                                                            // Hide sections if no installment selected
+                                                            amountSection.classList.add('hidden');
+                                                            reasonSection.classList.add('hidden');
+                                                            amountInput.value = '';
+                                                        }
+                                                    }
+
+                                                    installmentSelect.addEventListener('change', handleInstallmentChange);
+                                                    
+                                                    // Initialize on page load if old value exists
+                                                    if (installmentSelect.value) {
+                                                        handleInstallmentChange();
+                                                    }
+                                                }
+                                            })();
+
                                             // Character count for reason field
                                             (function() {
                                                 const reasonField = document.getElementById('discount_reason');

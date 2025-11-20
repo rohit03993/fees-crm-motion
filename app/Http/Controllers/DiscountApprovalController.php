@@ -18,7 +18,7 @@ class DiscountApprovalController extends Controller
     {
         $this->authorize('viewAny', Discount::class);
 
-        $discounts = Discount::with(['student', 'requester', 'approver'])
+        $discounts = Discount::with(['student', 'installment', 'requester', 'approver'])
             ->latest()
             ->paginate(10);
 

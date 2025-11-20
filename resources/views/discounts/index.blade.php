@@ -45,6 +45,11 @@
                                     </td>
                                     <td class="px-4 py-3 text-gray-600">
                                         ₹{{ number_format($discount->amount, 2) }}
+                                        @if($discount->installment)
+                                            <div class="text-xs text-indigo-600 font-medium mt-1">
+                                                Installment #{{ $discount->installment->installment_number }}
+                                            </div>
+                                        @endif
                                         <div class="text-xs text-gray-400">Requested {{ $discount->created_at->format('d M Y H:i') }}</div>
                                     </td>
                                     <td class="px-4 py-3 text-gray-600">
