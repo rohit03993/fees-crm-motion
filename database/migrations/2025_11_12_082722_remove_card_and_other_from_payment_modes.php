@@ -21,7 +21,9 @@ return new class extends Migration
 
             // For MySQL, we need to alter the enum column
             // Note: This uses raw SQL as Laravel doesn't support modifying enum columns directly
-            DB::statement("ALTER TABLE payments MODIFY COLUMN payment_mode ENUM('cash', 'upi', 'bank_transfer', 'cheque') DEFAULT 'cash'");
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("ALTER TABLE payments MODIFY COLUMN payment_mode ENUM('cash', 'upi', 'bank_transfer', 'cheque') DEFAULT 'cash'");
+            }
         }
     }
 
@@ -32,7 +34,9 @@ return new class extends Migration
     {
         // Restore the original enum values
         if (Schema::hasTable('payments') && Schema::hasColumn('payments', 'payment_mode')) {
-            DB::statement("ALTER TABLE payments MODIFY COLUMN payment_mode ENUM('cash', 'card', 'upi', 'bank_transfer', 'cheque', 'other') DEFAULT 'cash'");
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("ALTER TABLE payments MODIFY COLUMN payment_mode ENUM('cash', 'card', 'upi', 'bank_transfer', 'cheque', 'other') DEFAULT 'cash'");
+            }
         }
     }
 };
