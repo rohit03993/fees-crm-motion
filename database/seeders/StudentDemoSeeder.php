@@ -16,6 +16,9 @@ class StudentDemoSeeder extends Seeder
             [
                 'name' => 'Rohan Sharma',
                 'father_name' => 'Mahesh Sharma',
+                'guardian_1_name' => 'Mahesh Sharma',
+                'guardian_1_relation' => 'Father',
+                'guardian_1_whatsapp' => '9876543210',
                 'contact_number' => '9876543210',
                 'whatsapp_number' => '9876543210',
                 'course_id' => 1,
@@ -50,6 +53,9 @@ class StudentDemoSeeder extends Seeder
             [
                 'name' => 'Tanvi Jain',
                 'father_name' => 'Suresh Jain',
+                'guardian_1_name' => 'Suresh Jain',
+                'guardian_1_relation' => 'Father',
+                'guardian_1_whatsapp' => '9123456780',
                 'contact_number' => '9123456780',
                 'whatsapp_number' => '9123456780',
                 'course_id' => 2,
@@ -81,6 +87,9 @@ class StudentDemoSeeder extends Seeder
             [
                 'name' => 'Aditi Verma',
                 'father_name' => 'Vikas Verma',
+                'guardian_1_name' => 'Vikas Verma',
+                'guardian_1_relation' => 'Father',
+                'guardian_1_whatsapp' => '9012345678',
                 'contact_number' => '9012345678',
                 'whatsapp_number' => '9012345678',
                 'course_id' => 3,
