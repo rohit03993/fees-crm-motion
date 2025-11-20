@@ -13,7 +13,7 @@ class PenaltySettingsController extends Controller
 {
     public function edit(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('view-settings');
 
         $settings = [
             'grace_days' => Setting::getValue('penalty.grace_days', config('fees.penalty.grace_days')),
@@ -29,7 +29,7 @@ class PenaltySettingsController extends Controller
 
     public function update(UpdatePenaltySettingsRequest $request): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('update-settings');
 
         $data = $request->validated();
 
@@ -45,7 +45,7 @@ class PenaltySettingsController extends Controller
 
     public function clearAllStudents(): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('clear-students');
 
         DB::transaction(function () {
             // Delete all students - cascading foreign keys will automatically delete:

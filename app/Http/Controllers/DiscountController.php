@@ -15,6 +15,8 @@ class DiscountController extends Controller
 
     public function store(StoreDiscountRequest $request, Student $student): RedirectResponse
     {
+        $this->authorize('create', \App\Models\Discount::class);
+        
         try {
             $data = $request->validated();
             $data['document'] = $request->file('document');

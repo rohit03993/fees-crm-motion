@@ -19,6 +19,8 @@ class StudentController extends Controller
 
     public function index(): View
     {
+        $this->authorize('viewAny', Student::class);
+        
         $students = Student::with(['course', 'branch', 'fee'])
             ->latest()
             ->paginate(10);
@@ -28,6 +30,8 @@ class StudentController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Student::class);
+        
         $courses = Course::where('is_active', true)->orderBy('name')->get();
         $branches = Branch::where('is_active', true)->orderBy('name')->get();
         
@@ -56,6 +60,8 @@ class StudentController extends Controller
 
     public function store(StoreStudentRequest $request): RedirectResponse
     {
+        $this->authorize('create', Student::class);
+        
         $student = $this->studentService->createStudent($request->validated());
 
         return redirect()->route('students.show', $student)->with('success', 'Student enrolled successfully.');
@@ -63,6 +69,8 @@ class StudentController extends Controller
 
     public function show(Student $student): View
     {
+        $this->authorize('view', $student);
+        
         $student->load([
             'course',
             'branch',

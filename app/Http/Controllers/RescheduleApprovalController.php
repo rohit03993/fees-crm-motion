@@ -16,7 +16,7 @@ class RescheduleApprovalController extends Controller
 
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('viewAny', Reschedule::class);
 
         $reschedules = Reschedule::with(['student', 'installment', 'requester', 'approver'])
             ->latest()
@@ -27,7 +27,7 @@ class RescheduleApprovalController extends Controller
 
     public function update(HandleRescheduleDecisionRequest $request, Reschedule $reschedule): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('update', $reschedule);
 
         $data = $request->validated();
 

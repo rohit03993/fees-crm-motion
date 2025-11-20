@@ -15,7 +15,7 @@ class MiscChargeController extends Controller
 {
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         // Get all course-level and global misc charges grouped by course
         $chargesByCourse = MiscCharge::whereNull('student_id')
@@ -39,7 +39,7 @@ class MiscChargeController extends Controller
 
     public function create(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         $courses = Course::where('is_active', true)->orderBy('name')->get();
 
@@ -48,7 +48,7 @@ class MiscChargeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         $validated = $request->validate([
             'course_id' => ['nullable', 'exists:courses,id'], // Allow null for global charges
@@ -108,7 +108,7 @@ class MiscChargeController extends Controller
 
     public function edit(MiscCharge $miscCharge): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         // Only allow editing course-level charges (where student_id is null)
         if ($miscCharge->student_id !== null) {
@@ -122,7 +122,7 @@ class MiscChargeController extends Controller
 
     public function update(Request $request, MiscCharge $miscCharge): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         // Only allow editing course-level charges
         if ($miscCharge->student_id !== null) {
@@ -198,7 +198,7 @@ class MiscChargeController extends Controller
 
     public function destroy(MiscCharge $miscCharge): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-misc-charges');
         
         // Only allow deleting course-level charges
         if ($miscCharge->student_id !== null) {

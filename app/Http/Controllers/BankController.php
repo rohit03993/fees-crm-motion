@@ -12,7 +12,7 @@ class BankController extends Controller
 {
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         $banks = Bank::orderBy('name')->paginate(15);
 
@@ -21,14 +21,14 @@ class BankController extends Controller
 
     public function create(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         return view('banks.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -45,14 +45,14 @@ class BankController extends Controller
 
     public function edit(Bank $bank): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         return view('banks.edit', compact('bank'));
     }
 
     public function update(Request $request, Bank $bank): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -69,7 +69,7 @@ class BankController extends Controller
 
     public function destroy(Bank $bank): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-banks');
         
         $bank->delete();
 

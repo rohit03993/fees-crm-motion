@@ -15,8 +15,12 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Route;
 
+// Show login page directly at root
 Route::get('/', function () {
-    return view('welcome');
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+    return view('auth.login');
 });
 
 // Dashboard - accessible to all authenticated users

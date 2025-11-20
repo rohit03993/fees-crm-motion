@@ -13,7 +13,7 @@ class CourseController extends Controller
 {
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         $courses = Course::withCount('students')->orderBy('name')->paginate(15);
 
@@ -22,14 +22,14 @@ class CourseController extends Controller
 
     public function create(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         return view('courses.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -48,14 +48,14 @@ class CourseController extends Controller
 
     public function edit(Course $course): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         return view('courses.edit', compact('course'));
     }
 
     public function update(Request $request, Course $course): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -73,7 +73,7 @@ class CourseController extends Controller
 
     public function destroy(Course $course): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-courses');
         
         // Check if course has students
         if ($course->students()->count() > 0) {

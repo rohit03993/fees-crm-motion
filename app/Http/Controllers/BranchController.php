@@ -12,7 +12,7 @@ class BranchController extends Controller
 {
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         $branches = Branch::withCount('students')->orderBy('name')->paginate(15);
 
@@ -21,14 +21,14 @@ class BranchController extends Controller
 
     public function create(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         return view('branches.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -47,14 +47,14 @@ class BranchController extends Controller
 
     public function edit(Branch $branch): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         return view('branches.edit', compact('branch'));
     }
 
     public function update(Request $request, Branch $branch): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -73,7 +73,7 @@ class BranchController extends Controller
 
     public function destroy(Branch $branch): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage-branches');
         
         // Check if branch has students
         if ($branch->students()->count() > 0) {

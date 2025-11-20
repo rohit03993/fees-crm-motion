@@ -18,6 +18,8 @@ class PaymentController extends Controller
 
     public function store(StorePaymentRequest $request, Student $student): RedirectResponse
     {
+        $this->authorize('create', \App\Models\Payment::class);
+        
         try {
             $this->paymentService->recordPayment($student, $request->validated());
 
@@ -39,6 +41,8 @@ class PaymentController extends Controller
 
     public function createRemainingInstallment(CreateRemainingInstallmentRequest $request, Student $student, Installment $installment): RedirectResponse
     {
+        $this->authorize('create', \App\Models\Payment::class);
+        
         // Load the fee relationship
         $installment->load('fee');
         

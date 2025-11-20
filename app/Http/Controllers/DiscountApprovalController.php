@@ -16,7 +16,7 @@ class DiscountApprovalController extends Controller
 
     public function index(): View
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('viewAny', Discount::class);
 
         $discounts = Discount::with(['student', 'requester', 'approver'])
             ->latest()
@@ -27,7 +27,7 @@ class DiscountApprovalController extends Controller
 
     public function update(HandleDiscountDecisionRequest $request, Discount $discount): RedirectResponse
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('update', $discount);
 
         $data = $request->validated();
 

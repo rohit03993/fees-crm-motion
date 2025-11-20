@@ -16,6 +16,8 @@ class RescheduleController extends Controller
 
     public function store(StoreRescheduleRequest $request, Student $student): RedirectResponse
     {
+        $this->authorize('create', \App\Models\Reschedule::class);
+        
         $installment = Installment::findOrFail($request->validated()['installment_id']);
 
         $this->rescheduleService->requestReschedule($student, $installment, $request->validated());
