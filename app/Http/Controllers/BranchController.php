@@ -64,7 +64,8 @@ class BranchController extends Controller
             'is_active' => ['boolean'],
         ]);
 
-        $validated['is_active'] = $validated['is_active'] ?? false;
+        // Treat the checkbox like the create form: unchecked means false
+        $validated['is_active'] = $request->boolean('is_active');
 
         $branch->update($validated);
 
