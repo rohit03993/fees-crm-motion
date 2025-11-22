@@ -135,18 +135,7 @@ class MiscChargeController extends Controller
         ]);
 
         return DB::transaction(function () use ($miscCharge, $validated) {
-            // Check if this charge has approved payments
-            $hasApprovedPayments = $miscCharge->payments()
-                ->where('status', 'approved')
-                ->exists();
-            
-            if ($hasApprovedPayments) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'Cannot edit this charge because it has approved payments. Please contact support.');
-            }
-            
-            // If it's a student-specific charge, update it directly
+            // If it's a student-specific charge, update it directly and recalculate status
             if ($miscCharge->student_id !== null) {
                 $miscCharge->update([
                     'label' => $validated['label'],
@@ -154,11 +143,24 @@ class MiscChargeController extends Controller
                     'due_date' => $validated['due_date'] ?? null,
                 ]);
                 
+                // Recalculate status based on payments made vs new amount
+                $totalPaid = $miscCharge->payments()
+                    ->where('status', 'approved')
+                    ->sum('amount_received');
+                
+                // If total paid is less than new amount, status should be pending
+                // If total paid equals or exceeds new amount, status should be paid
+                if ($totalPaid >= $validated['amount'] - 0.01) {
+                    $miscCharge->update(['status' => 'paid']);
+                } else {
+                    $miscCharge->update(['status' => 'pending']);
+                }
+                
                 return redirect()->route('students.show', $miscCharge->student_id)
                     ->with('success', 'Miscellaneous charge updated successfully.');
             }
             
-            // For course-level charges, update template and all pending student instances
+            // For course-level charges, update template and ALL student instances (regardless of status)
             $oldCourseId = $miscCharge->course_id;
             $newCourseId = $validated['course_id'] ?? null;
             $oldLabel = $miscCharge->getOriginal('label');
@@ -173,50 +175,101 @@ class MiscChargeController extends Controller
 
             // Only auto-apply to students if course_id is set (not global)
             if ($newCourseId) {
-                // If course changed, update all student-specific instances
+                // If course changed, move charges from old course to new course
                 if ($oldCourseId !== $newCourseId) {
-                    // Remove charges from old course students (if old course was not null)
+                    // Update all student-specific instances from old course to new course
                     if ($oldCourseId) {
                         MiscCharge::where('course_id', $oldCourseId)
                             ->where('student_id', '!=', null)
                             ->where('label', $oldLabel)
-                            ->where('status', 'pending')
-                            ->whereDoesntHave('payments', function($query) {
-                                $query->where('status', 'approved');
-                            })
-                            ->delete();
+                            ->update([
+                                'course_id' => $newCourseId,
+                                'label' => $validated['label'],
+                                'amount' => $validated['amount'],
+                                'due_date' => $validated['due_date'] ?? null,
+                            ]);
                     }
 
-                    // Add charges to new course students
+                    // Add charges to new course students who don't have it yet
                     $students = Student::where('course_id', $newCourseId)
                         ->where('status', 'active')
                         ->get();
 
                     foreach ($students as $student) {
-                        MiscCharge::create([
-                            'course_id' => $newCourseId,
-                            'student_id' => $student->id,
-                            'label' => $validated['label'],
-                            'amount' => $validated['amount'],
-                            'due_date' => $validated['due_date'] ?? null,
-                            'status' => 'pending',
-                            'created_by' => Auth::id(),
-                        ]);
+                        // Check if this charge already exists for this student
+                        $exists = MiscCharge::where('student_id', $student->id)
+                            ->where('course_id', $newCourseId)
+                            ->where('label', $validated['label'])
+                            ->exists();
+
+                        if (!$exists) {
+                            MiscCharge::create([
+                                'course_id' => $newCourseId,
+                                'student_id' => $student->id,
+                                'label' => $validated['label'],
+                                'amount' => $validated['amount'],
+                                'due_date' => $validated['due_date'] ?? null,
+                                'status' => 'pending',
+                                'created_by' => Auth::id(),
+                            ]);
+                        }
                     }
                 } else {
-                    // Same course - update all pending student instances (without approved payments)
-                    MiscCharge::where('course_id', $newCourseId)
+                    // Same course - update ALL student instances and recalculate status based on payments
+                    $studentCharges = MiscCharge::where('course_id', $newCourseId)
                         ->where('student_id', '!=', null)
                         ->where('label', $oldLabel)
-                        ->where('status', 'pending')
-                        ->whereDoesntHave('payments', function($query) {
-                            $query->where('status', 'approved');
-                        })
-                        ->update([
+                        ->get();
+                    
+                    foreach ($studentCharges as $studentCharge) {
+                        // Update the charge details
+                        $studentCharge->update([
                             'label' => $validated['label'],
                             'amount' => $validated['amount'],
                             'due_date' => $validated['due_date'] ?? null,
                         ]);
+                        
+                        // Recalculate status based on payments made vs new amount
+                        $totalPaid = $studentCharge->payments()
+                            ->where('status', 'approved')
+                            ->sum('amount_received');
+                        
+                        // If total paid is less than new amount, status should be pending
+                        // If total paid equals or exceeds new amount, status should be paid
+                        if ($totalPaid >= $validated['amount'] - 0.01) {
+                            $studentCharge->update(['status' => 'paid']);
+                        } else {
+                            $studentCharge->update(['status' => 'pending']);
+                        }
+                    }
+                }
+            } else {
+                // Global charge - update all student instances and recalculate status
+                $studentCharges = MiscCharge::whereNull('course_id')
+                    ->where('student_id', '!=', null)
+                    ->where('label', $oldLabel)
+                    ->get();
+                
+                foreach ($studentCharges as $studentCharge) {
+                    // Update the charge details
+                    $studentCharge->update([
+                        'label' => $validated['label'],
+                        'amount' => $validated['amount'],
+                        'due_date' => $validated['due_date'] ?? null,
+                    ]);
+                    
+                    // Recalculate status based on payments made vs new amount
+                    $totalPaid = $studentCharge->payments()
+                        ->where('status', 'approved')
+                        ->sum('amount_received');
+                    
+                    // If total paid is less than new amount, status should be pending
+                    // If total paid equals or exceeds new amount, status should be paid
+                    if ($totalPaid >= $validated['amount'] - 0.01) {
+                        $studentCharge->update(['status' => 'paid']);
+                    } else {
+                        $studentCharge->update(['status' => 'pending']);
+                    }
                 }
             }
 
@@ -230,20 +283,6 @@ class MiscChargeController extends Controller
         $this->authorize('manage-misc-charges');
         
         return DB::transaction(function () use ($miscCharge) {
-            // Check if this charge has approved payments
-            $hasApprovedPayments = $miscCharge->payments()
-                ->where('status', 'approved')
-                ->exists();
-            
-            if ($hasApprovedPayments) {
-                $redirectRoute = $miscCharge->student_id 
-                    ? route('students.show', $miscCharge->student_id)
-                    : route('misc-charges.index');
-                    
-                return redirect($redirectRoute)
-                    ->with('error', 'Cannot delete this charge because it has approved payments. Please contact support.');
-            }
-            
             // If it's a student-specific charge, delete it directly
             if ($miscCharge->student_id !== null) {
                 $studentId = $miscCharge->student_id;
@@ -253,22 +292,27 @@ class MiscChargeController extends Controller
                     ->with('success', 'Miscellaneous charge deleted successfully.');
             }
             
-            // For course-level charges, delete template and all pending student instances
+            // For course-level charges, delete template and ALL student instances
             $courseId = $miscCharge->course_id;
             $label = $miscCharge->label;
 
             // Delete the course-level charge
             $miscCharge->delete();
 
-            // Delete all pending student-specific instances (without approved payments)
+            // Delete ALL student-specific instances (regardless of status)
+            // Note: Charges with payments will be deleted, but payment records will remain
             MiscCharge::where('course_id', $courseId)
                 ->where('student_id', '!=', null)
                 ->where('label', $label)
-                ->where('status', 'pending')
-                ->whereDoesntHave('payments', function($query) {
-                    $query->where('status', 'approved');
-                })
                 ->delete();
+            
+            // For global charges, delete all matching student instances
+            if ($courseId === null) {
+                MiscCharge::whereNull('course_id')
+                    ->where('student_id', '!=', null)
+                    ->where('label', $label)
+                    ->delete();
+            }
 
             return redirect()->route('misc-charges.index')
                 ->with('success', 'Miscellaneous charge deleted and removed from all students.');

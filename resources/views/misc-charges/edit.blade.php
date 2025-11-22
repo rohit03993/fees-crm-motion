@@ -58,11 +58,11 @@
                             </svg>
                             <div class="ml-3">
                                 <p class="text-sm text-amber-700">
-                                    <strong>Warning:</strong> 
+                                    <strong>Important:</strong> 
                                     @if($miscCharge->course_id)
-                                        Changes will update all pending charges for students in this course. Already paid charges will not be affected.
+                                        Changes will update <strong>ALL</strong> charges for students in this course, regardless of payment status. This includes pending, paid, and cancelled charges.
                                     @else
-                                        Changes to this global charge will not affect students who already have this charge. This charge can be selected when enrolling new students.
+                                        Changes will update <strong>ALL</strong> student charges matching this label, regardless of payment status. This charge can also be selected when enrolling new students.
                                     @endif
                                 </p>
                             </div>
