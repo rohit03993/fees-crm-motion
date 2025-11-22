@@ -110,25 +110,23 @@ class MiscChargeController extends Controller
     {
         $this->authorize('manage-misc-charges');
         
-        // Only allow editing course-level charges (where student_id is null)
-        if ($miscCharge->student_id !== null) {
-            abort(403, 'Cannot edit student-specific charges. Edit the course-level charge instead.');
+        // Allow editing both course-level and student-specific charges
+        // For student-specific charges, we'll edit them directly
+        $courses = Course::where('is_active', true)->orderBy('name')->get();
+        
+        // If it's a student-specific charge, get the student info
+        $student = null;
+        if ($miscCharge->student_id) {
+            $student = $miscCharge->student;
         }
 
-        $courses = Course::where('is_active', true)->orderBy('name')->get();
-
-        return view('misc-charges.edit', compact('miscCharge', 'courses'));
+        return view('misc-charges.edit', compact('miscCharge', 'courses', 'student'));
     }
 
     public function update(Request $request, MiscCharge $miscCharge): RedirectResponse
     {
         $this->authorize('manage-misc-charges');
         
-        // Only allow editing course-level charges
-        if ($miscCharge->student_id !== null) {
-            abort(403, 'Cannot edit student-specific charges.');
-        }
-
         $validated = $request->validate([
             'course_id' => ['nullable', 'exists:courses,id'], // Allow null for global charges
             'label' => ['required', 'string', 'max:255'],
@@ -137,8 +135,33 @@ class MiscChargeController extends Controller
         ]);
 
         return DB::transaction(function () use ($miscCharge, $validated) {
+            // Check if this charge has approved payments
+            $hasApprovedPayments = $miscCharge->payments()
+                ->where('status', 'approved')
+                ->exists();
+            
+            if ($hasApprovedPayments) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Cannot edit this charge because it has approved payments. Please contact support.');
+            }
+            
+            // If it's a student-specific charge, update it directly
+            if ($miscCharge->student_id !== null) {
+                $miscCharge->update([
+                    'label' => $validated['label'],
+                    'amount' => $validated['amount'],
+                    'due_date' => $validated['due_date'] ?? null,
+                ]);
+                
+                return redirect()->route('students.show', $miscCharge->student_id)
+                    ->with('success', 'Miscellaneous charge updated successfully.');
+            }
+            
+            // For course-level charges, update template and all pending student instances
             $oldCourseId = $miscCharge->course_id;
             $newCourseId = $validated['course_id'] ?? null;
+            $oldLabel = $miscCharge->getOriginal('label');
 
             // Update the template charge
             $miscCharge->update([
@@ -156,8 +179,11 @@ class MiscChargeController extends Controller
                     if ($oldCourseId) {
                         MiscCharge::where('course_id', $oldCourseId)
                             ->where('student_id', '!=', null)
-                            ->where('label', $miscCharge->getOriginal('label'))
+                            ->where('label', $oldLabel)
                             ->where('status', 'pending')
+                            ->whereDoesntHave('payments', function($query) {
+                                $query->where('status', 'approved');
+                            })
                             ->delete();
                     }
 
@@ -178,11 +204,14 @@ class MiscChargeController extends Controller
                         ]);
                     }
                 } else {
-                    // Same course - just update all pending student instances
+                    // Same course - update all pending student instances (without approved payments)
                     MiscCharge::where('course_id', $newCourseId)
                         ->where('student_id', '!=', null)
-                        ->where('label', $miscCharge->getOriginal('label'))
+                        ->where('label', $oldLabel)
                         ->where('status', 'pending')
+                        ->whereDoesntHave('payments', function($query) {
+                            $query->where('status', 'approved');
+                        })
                         ->update([
                             'label' => $validated['label'],
                             'amount' => $validated['amount'],
@@ -200,23 +229,45 @@ class MiscChargeController extends Controller
     {
         $this->authorize('manage-misc-charges');
         
-        // Only allow deleting course-level charges
-        if ($miscCharge->student_id !== null) {
-            abort(403, 'Cannot delete student-specific charges. Delete the course-level charge instead.');
-        }
-
         return DB::transaction(function () use ($miscCharge) {
+            // Check if this charge has approved payments
+            $hasApprovedPayments = $miscCharge->payments()
+                ->where('status', 'approved')
+                ->exists();
+            
+            if ($hasApprovedPayments) {
+                $redirectRoute = $miscCharge->student_id 
+                    ? route('students.show', $miscCharge->student_id)
+                    : route('misc-charges.index');
+                    
+                return redirect($redirectRoute)
+                    ->with('error', 'Cannot delete this charge because it has approved payments. Please contact support.');
+            }
+            
+            // If it's a student-specific charge, delete it directly
+            if ($miscCharge->student_id !== null) {
+                $studentId = $miscCharge->student_id;
+                $miscCharge->delete();
+                
+                return redirect()->route('students.show', $studentId)
+                    ->with('success', 'Miscellaneous charge deleted successfully.');
+            }
+            
+            // For course-level charges, delete template and all pending student instances
             $courseId = $miscCharge->course_id;
             $label = $miscCharge->label;
 
             // Delete the course-level charge
             $miscCharge->delete();
 
-            // Delete all pending student-specific instances
+            // Delete all pending student-specific instances (without approved payments)
             MiscCharge::where('course_id', $courseId)
                 ->where('student_id', '!=', null)
                 ->where('label', $label)
                 ->where('status', 'pending')
+                ->whereDoesntHave('payments', function($query) {
+                    $query->where('status', 'approved');
+                })
                 ->delete();
 
             return redirect()->route('misc-charges.index')

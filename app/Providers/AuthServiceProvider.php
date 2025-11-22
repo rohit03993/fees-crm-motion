@@ -6,12 +6,14 @@ use App\Models\Discount;
 use App\Models\Payment;
 use App\Models\Reschedule;
 use App\Models\Student;
+use App\Models\User;
 use App\Policies\DiscountPolicy;
 use App\Policies\MasterDataPolicy;
 use App\Policies\PaymentPolicy;
 use App\Policies\ReschedulePolicy;
 use App\Policies\SettingsPolicy;
 use App\Policies\StudentPolicy;
+use App\Policies\UserPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 
@@ -27,6 +29,7 @@ class AuthServiceProvider extends ServiceProvider
         Payment::class => PaymentPolicy::class,
         Reschedule::class => ReschedulePolicy::class,
         Discount::class => DiscountPolicy::class,
+        User::class => UserPolicy::class,
     ];
 
     /**

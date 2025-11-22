@@ -6,6 +6,7 @@ use App\Models\Discount;
 use App\Models\InstallmentReminder;
 use App\Models\Penalty;
 use App\Models\Reschedule;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -100,6 +101,11 @@ class Student extends Model
     public function discounts(): HasMany
     {
         return $this->hasMany(Discount::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }
 

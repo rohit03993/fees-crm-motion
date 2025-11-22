@@ -13,6 +13,7 @@ use App\Http\Controllers\RescheduleController;
 use App\Http\Controllers\PenaltySettingsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Show login page directly at root
@@ -30,6 +31,9 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['au
 Route::middleware(['auth', 'verified', 'staff'])->group(function () {
     // Student management
     Route::resource('students', StudentController::class)->only(['index', 'create', 'store', 'show']);
+    Route::patch('students/{student}/basic-info', [StudentController::class, 'updateBasicInfo'])->name('students.basic-info.update');
+    Route::post('students/{student}/misc-charges', [StudentController::class, 'storeMiscCharge'])->name('students.misc-charges.store');
+    Route::post('students/{student}/penalties', [StudentController::class, 'storePenalty'])->name('students.penalties.store');
     
     // Payment operations
     Route::post('students/{student}/payments', [PaymentController::class, 'store'])->name('students.payments.store');
@@ -62,6 +66,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::resource('branches', BranchController::class)->except(['show']);
     Route::resource('misc-charges', MiscChargeController::class)->except(['show']);
     Route::get('misc-charges/api/available', [MiscChargeController::class, 'getAvailableCharges'])->name('misc-charges.available');
+    
+    // Staff management
+    Route::resource('users', UserController::class)->except(['show']);
 });
 
 Route::middleware('auth')->group(function () {

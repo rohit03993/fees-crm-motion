@@ -8,11 +8,21 @@
     $nextInstallment = $outstandingInstallments->first();
     // Calculate penalties: Late fees from penalties table + GST penalties from misc_charges
     // Get all penalties (for display in penalty ledger)
-    $lateFeePenalties = $student->penalties;
+    $allPenalties = $student->penalties;
+    
+    // Separate manual penalties from auto-generated late fee penalties
+    $lateFeePenalties = $allPenalties->filter(function($penalty) {
+        return $penalty->penalty_type === 'auto';
+    });
+    $manualPenalties = $allPenalties->filter(function($penalty) {
+        return $penalty->penalty_type === 'manual';
+    });
+    
     $gstPenalties = $student->miscCharges()->where('label', 'like', 'GST Penalty%')->get();
     $lateFeePenaltyTotal = $lateFeePenalties->sum('penalty_amount');
+    $manualPenaltyTotal = $manualPenalties->sum('penalty_amount');
     $gstPenaltyTotal = $gstPenalties->sum('amount');
-    $penaltyTotal = $lateFeePenaltyTotal + $gstPenaltyTotal;
+    $penaltyTotal = $lateFeePenaltyTotal + $manualPenaltyTotal + $gstPenaltyTotal;
     
     // Calculate UNPAID penalties (for total unpaid calculation)
     // Late fee penalties: exclude those with status 'paid' or 'waived'
@@ -21,13 +31,19 @@
     });
     $unpaidLateFeePenaltyTotal = $unpaidLateFeePenalties->sum('penalty_amount');
     
+    // Manual penalties: exclude those with status 'paid' or 'waived'
+    $unpaidManualPenalties = $manualPenalties->filter(function($penalty) {
+        return !in_array($penalty->status, ['paid', 'waived']);
+    });
+    $unpaidManualPenaltyTotal = $unpaidManualPenalties->sum('penalty_amount');
+    
     // GST penalties: exclude those with status 'paid' or 'cancelled'
     $unpaidGstPenalties = $gstPenalties->filter(function($penalty) {
         return !in_array($penalty->status, ['paid', 'cancelled']);
     });
     $unpaidGstPenaltyTotal = $unpaidGstPenalties->sum('amount');
     
-    $unpaidPenaltyTotal = $unpaidLateFeePenaltyTotal + $unpaidGstPenaltyTotal;
+    $unpaidPenaltyTotal = $unpaidLateFeePenaltyTotal + $unpaidManualPenaltyTotal + $unpaidGstPenaltyTotal;
     $recentReminders = $student->reminders->take(8);
     // Only show unpaid installments for reschedule (status != 'paid' or amount > paid_amount)
     $reschedulableInstallments = collect(optional($student->fee)->installments)
@@ -175,7 +191,29 @@
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $student->name }}</h2>
                 <p class="mt-1 text-sm text-gray-500">UID: {{ $student->student_uid }}</p>
             </div>
-            <a href="{{ route('students.index') }}" class="text-sm text-indigo-600 hover:text-indigo-500 font-semibold">← Back to list</a>
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="openAddMiscChargeModal()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Miscellaneous
+                </button>
+                <button type="button" onclick="openAddPenaltyModal()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Penalty
+                </button>
+                @can('update', $student)
+                    <button type="button" onclick="openEditBasicInfoModal()" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit Basic Info
+                    </button>
+                @endcan
+                <a href="{{ route('students.index') }}" class="text-sm text-indigo-600 hover:text-indigo-500 font-semibold">← Back to list</a>
+            </div>
         </div>
     </x-slot>
 
@@ -673,6 +711,7 @@
                             @if($penaltyTotal > 0)
                                 <div class="flex gap-4 text-xs text-gray-600">
                                     <span>Late Fees: ₹{{ number_format($lateFeePenaltyTotal, 2) }}</span>
+                                    <span>Manual Penalties: ₹{{ number_format($manualPenaltyTotal, 2) }}</span>
                                     <span>GST Penalties: ₹{{ number_format($gstPenaltyTotal, 2) }}</span>
                                 </div>
                             @endif
@@ -691,7 +730,7 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
                                     @php
-                                        // Combine late fee penalties and GST penalties, sorted by date
+                                        // Combine late fee penalties, manual penalties, and GST penalties, sorted by date
                                         $allPenalties = collect();
                                         
                                         // Add late fee penalties
@@ -704,6 +743,21 @@
                                                 'status' => $penalty->status,
                                                 'installment' => $penalty->installment,
                                                 'penalty_rate' => $penalty->penalty_rate,
+                                                'penalty' => $penalty,
+                                            ]);
+                                        }
+                                        
+                                        // Add manual penalties
+                                        foreach ($manualPenalties as $penalty) {
+                                            $allPenalties->push([
+                                                'type' => 'manual',
+                                                'date' => $penalty->applied_date,
+                                                'amount' => $penalty->penalty_amount,
+                                                'days_delayed' => null, // Manual penalties don't have days delayed
+                                                'status' => $penalty->status,
+                                                'installment' => null, // Manual penalties are not tied to installments
+                                                'penalty_rate' => null, // Manual penalties don't have a rate
+                                                'penalty_type_name' => $penalty->remarks, // The type name stored in remarks
                                                 'penalty' => $penalty,
                                             ]);
                                         }
@@ -742,6 +796,10 @@
                                                     <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
                                                         Late Fee
                                                     </span>
+                                                @elseif($penaltyItem['type'] === 'manual')
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                        {{ $penaltyItem['penalty_type_name'] ?? 'Manual Penalty' }}
+                                                    </span>
                                                 @else
                                                     <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
                                                         GST Penalty
@@ -756,6 +814,13 @@
                                                             <div class="text-xs text-gray-400">Due {{ $penaltyItem['installment']->due_date->format('d M Y') }}</div>
                                                         @endif
                                                         <div class="text-xs text-gray-400 mt-0.5">Rate: {{ number_format($penaltyItem['penalty_rate'], 2) }}% per day</div>
+                                                    </div>
+                                                @elseif($penaltyItem['type'] === 'manual')
+                                                    <div class="text-sm">
+                                                        Manually Added Penalty
+                                                    </div>
+                                                    <div class="text-xs text-gray-400 mt-0.5">
+                                                        Applied on {{ \Carbon\Carbon::parse($penaltyItem['date'])->format('d M Y') }}
                                                     </div>
                                                 @else
                                                     <div class="text-sm">
@@ -777,8 +842,8 @@
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3">
-                                                @if($penaltyItem['type'] === 'late_fee')
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $penaltyItem['status'] === 'recorded' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700' }}">
+                                                @if($penaltyItem['type'] === 'late_fee' || $penaltyItem['type'] === 'manual')
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $penaltyItem['status'] === 'recorded' ? 'bg-amber-50 text-amber-700' : ($penaltyItem['status'] === 'paid' ? 'bg-emerald-50 text-emerald-700' : ($penaltyItem['status'] === 'waived' ? 'bg-gray-50 text-gray-700' : 'bg-slate-100 text-slate-700')) }}">
                                                         {{ Str::headline($penaltyItem['status']) }}
                                                     </span>
                                                 @else
@@ -1265,10 +1330,12 @@
                                                     <option value="">-- Select penalty type --</option>
                                                     <option value="late_fee" @selected(old('penalty_type') === 'late_fee')>Late Fee Penalty</option>
                                                     <option value="gst" @selected(old('penalty_type') === 'gst')>GST Penalty</option>
+                                                    <option value="manual" @selected(old('penalty_type') === 'manual')>Manually Added Penalty</option>
                                                 </select>
                                                 <x-input-error :messages="$errors->get('penalty_type')" class="mt-2" />
                                                 <p class="mt-2 text-sm text-red-700">Select the type of penalty you want to pay.</p>
                                             </div>
+                                        </div>
                                             
                                             <!-- Late Fee Penalty Selection -->
                                             <div id="late-fee-penalty-section" class="mt-4 hidden">
@@ -1302,6 +1369,23 @@
                                                 </select>
                                                 <x-input-error :messages="$errors->get('gst_penalty_charge_id')" class="mt-2" />
                                                 <p class="mt-2 text-sm text-red-700">Select the GST penalty you want to pay.</p>
+                                            </div>
+                                            
+                                            <!-- Manual Penalty Selection -->
+                                            <div id="manual-penalty-section" class="mt-4 hidden">
+                                                <x-input-label for="manual_penalty_id" value="Select Manually Added Penalty *" class="text-base font-semibold text-red-900" />
+                                                <select id="manual_penalty_id" name="penalty_id" class="mt-2 block w-full rounded-lg border-red-300 bg-white text-base font-medium focus:border-red-500 focus:ring-red-500">
+                                                    <option value="">-- Select a penalty --</option>
+                                                    @foreach($unpaidManualPenalties as $penalty)
+                                                        <option value="{{ $penalty->id }}" 
+                                                            data-penalty-amount="{{ $penalty->penalty_amount }}"
+                                                            @selected(old('penalty_id') == $penalty->id)>
+                                                            [{{ $penalty->remarks }}] &mdash; Applied {{ $penalty->applied_date->format('d M Y') }} &middot; ₹{{ number_format($penalty->penalty_amount, 2) }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <x-input-error :messages="$errors->get('penalty_id')" class="mt-2" />
+                                                <p class="mt-2 text-sm text-red-700">Select the manually added penalty you want to pay.</p>
                                             </div>
                                         </div>
 
@@ -2030,17 +2114,20 @@
                                     const installmentSelectEl = document.getElementById('installment_id');
                                     const miscChargeSelectEl = document.getElementById('misc_charge_id');
                                     const penaltyIdSelectEl = document.getElementById('penalty_id');
+                                    const manualPenaltyIdSelectEl = document.getElementById('manual_penalty_id');
                                     const gstPenaltyChargeIdSelectEl = document.getElementById('gst_penalty_charge_id');
                                     const amountReceivedEl = document.getElementById('amount_received');
                                     
                                     const selectedInstallment = installmentSelectEl?.value;
                                     const selectedMiscCharge = miscChargeSelectEl?.value;
                                     const selectedPenalty = penaltyIdSelectEl?.value;
+                                    const selectedManualPenalty = manualPenaltyIdSelectEl?.value;
                                     const selectedGstPenalty = gstPenaltyChargeIdSelectEl?.value;
                                     
                                     if ((selectedInstallment && selectedInstallment !== '') || 
                                         (selectedMiscCharge && selectedMiscCharge !== '') ||
                                         (selectedPenalty && selectedPenalty !== '') ||
+                                        (selectedManualPenalty && selectedManualPenalty !== '') ||
                                         (selectedGstPenalty && selectedGstPenalty !== '')) {
                                         // Show payment details section
                                         paymentDetailsSectionEl.classList.remove('hidden');
@@ -2100,6 +2187,25 @@
                                         } else if (selectedPenalty && penaltyIdSelectEl) {
                                             // Handle late fee penalty payment
                                             const selectedOption = penaltyIdSelectEl.options[penaltyIdSelectEl.selectedIndex];
+                                            const penaltyAmount = parseFloat(selectedOption?.dataset.penaltyAmount || 0);
+                                            if (penaltyAmount > 0 && amountReceivedEl) {
+                                                amountReceivedEl.value = penaltyAmount.toFixed(2);
+                                                amountReceivedEl.readOnly = false;
+                                            }
+                                            // Hide remaining installment section for penalties (full payment only)
+                                            if (remainingSection) {
+                                                remainingSection.classList.add('hidden');
+                                            }
+                                            if (remainingDateInput) {
+                                                remainingDateInput.removeAttribute('required');
+                                                remainingDateInput.disabled = true;
+                                            }
+                                            if (createRemainingCheckbox) {
+                                                createRemainingCheckbox.checked = false;
+                                            }
+                                        } else if (selectedManualPenalty && manualPenaltyIdSelectEl) {
+                                            // Handle manual penalty payment
+                                            const selectedOption = manualPenaltyIdSelectEl.options[manualPenaltyIdSelectEl.selectedIndex];
                                             const penaltyAmount = parseFloat(selectedOption?.dataset.penaltyAmount || 0);
                                             if (penaltyAmount > 0 && amountReceivedEl) {
                                                 amountReceivedEl.value = penaltyAmount.toFixed(2);
@@ -2219,19 +2325,22 @@
                                     }
                                 }, 100);
                                 
-                                // Handle penalty type change (late fee vs GST)
+                                // Handle penalty type change (late fee vs GST vs manual)
                                 function handlePenaltyTypeChange() {
                                     const penaltyTypeSelect = document.getElementById('penalty_type');
                                     const lateFeeSection = document.getElementById('late-fee-penalty-section');
                                     const gstPenaltySection = document.getElementById('gst-penalty-section');
+                                    const manualPenaltySection = document.getElementById('manual-penalty-section');
                                     const penaltyIdSelect = document.getElementById('penalty_id');
+                                    const manualPenaltyIdSelect = document.getElementById('manual_penalty_id');
                                     const gstPenaltyChargeIdSelect = document.getElementById('gst_penalty_charge_id');
                                     
                                     const penaltyType = penaltyTypeSelect?.value;
                                     
-                                    // Hide both penalty sub-sections
+                                    // Hide all penalty sub-sections
                                     if (lateFeeSection) lateFeeSection.classList.add('hidden');
                                     if (gstPenaltySection) gstPenaltySection.classList.add('hidden');
+                                    if (manualPenaltySection) manualPenaltySection.classList.add('hidden');
                                     
                                     // Hide payment details section until a specific penalty is selected
                                     if (paymentDetailsSection) paymentDetailsSection.classList.add('hidden');
@@ -2240,6 +2349,10 @@
                                     if (penaltyIdSelect) {
                                         penaltyIdSelect.value = '';
                                         penaltyIdSelect.required = false;
+                                    }
+                                    if (manualPenaltyIdSelect) {
+                                        manualPenaltyIdSelect.value = '';
+                                        manualPenaltyIdSelect.required = false;
                                     }
                                     if (gstPenaltyChargeIdSelect) {
                                         gstPenaltyChargeIdSelect.value = '';
@@ -2272,6 +2385,20 @@
                                                     togglePaymentDetailsSection();
                                                 });
                                                 gstPenaltyChargeIdSelect.setAttribute('data-listener-added', 'true');
+                                            }
+                                        }
+                                    } else if (penaltyType === 'manual') {
+                                        // Show manual penalty section
+                                        if (manualPenaltySection) manualPenaltySection.classList.remove('hidden');
+                                        if (manualPenaltyIdSelect) {
+                                            manualPenaltyIdSelect.required = true;
+                                            // Add event listener if not already added
+                                            if (!manualPenaltyIdSelect.hasAttribute('data-listener-added')) {
+                                                manualPenaltyIdSelect.addEventListener('change', function() {
+                                                    console.log('Manual penalty selected:', manualPenaltyIdSelect.value);
+                                                    togglePaymentDetailsSection();
+                                                });
+                                                manualPenaltyIdSelect.setAttribute('data-listener-added', 'true');
                                             }
                                         }
                                     }
@@ -2878,4 +3005,229 @@
             </div>
         </div>
     </div>
+
+    <!-- Edit Basic Info Modal -->
+    @can('update', $student)
+    <div id="editBasicInfoModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Edit Basic Information</h3>
+                    <button type="button" onclick="closeEditBasicInfoModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form method="POST" action="{{ route('students.basic-info.update', $student) }}" class="space-y-4">
+                    @csrf
+                    @method('PATCH')
+                    
+                    <div>
+                        <x-input-label for="edit_name" value="Student Name *" />
+                        <x-text-input id="edit_name" name="name" type="text" value="{{ old('name', $student->name) }}" class="mt-1 block w-full" required />
+                        <x-input-error :messages="$errors->get('name')" class="mt-2" />
+                    </div>
+                    
+                    <div>
+                        <x-input-label for="edit_guardian_1_name" value="Father's Name *" />
+                        <x-text-input id="edit_guardian_1_name" name="guardian_1_name" type="text" value="{{ old('guardian_1_name', $student->guardian_1_name) }}" class="mt-1 block w-full" required />
+                        <x-input-error :messages="$errors->get('guardian_1_name')" class="mt-2" />
+                    </div>
+                    
+                    <div>
+                        <x-input-label for="edit_guardian_1_whatsapp" value="Registered Mobile Number *" />
+                        <div class="relative mt-1">
+                            <span class="absolute inset-y-0 left-2 flex items-center text-xs font-medium text-gray-700">+91</span>
+                            <input id="edit_guardian_1_whatsapp" name="guardian_1_whatsapp" type="tel" pattern="[0-9]{10}" maxlength="10" 
+                                   value="{{ old('guardian_1_whatsapp', preg_replace('/^\+91|[^0-9]/', '', $student->guardian_1_whatsapp ?? '')) }}" 
+                                   class="block w-full text-sm rounded-xl border-gray-300 pl-12 pr-2 py-2 focus:border-indigo-500 focus:ring-indigo-500 {{ $errors->has('guardian_1_whatsapp') ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '' }}" 
+                                   placeholder="10 digits" required />
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Enter 10-digit mobile number</p>
+                        <x-input-error :messages="$errors->get('guardian_1_whatsapp')" class="mt-2" />
+                    </div>
+                    
+                    <div class="flex items-center justify-end gap-3 pt-4 border-t">
+                        <button type="button" onclick="closeEditBasicInfoModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                        <x-primary-button>Update Information</x-primary-button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Format phone number input - set up once on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const phoneInput = document.getElementById('edit_guardian_1_whatsapp');
+            if (phoneInput) {
+                // Remove existing listeners by cloning
+                const newInput = phoneInput.cloneNode(true);
+                phoneInput.parentNode.replaceChild(newInput, phoneInput);
+                
+                newInput.addEventListener('input', function(e) {
+                    this.value = this.value.replace(/[^0-9]/g, '').substring(0, 10);
+                });
+                
+                newInput.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    const paste = (e.clipboardData || window.clipboardData).getData('text');
+                    const digits = paste.replace(/[^0-9]/g, '').substring(0, 10);
+                    this.value = digits;
+                });
+            }
+        });
+        
+        function openEditBasicInfoModal() {
+            document.getElementById('editBasicInfoModal').classList.remove('hidden');
+        }
+        
+        function closeEditBasicInfoModal() {
+            document.getElementById('editBasicInfoModal').classList.add('hidden');
+        }
+        
+        // Close modal when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('editBasicInfoModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeEditBasicInfoModal();
+                    }
+                });
+            }
+        });
+    </script>
+    @endcan
+
+    <!-- Add Miscellaneous Charge Modal -->
+    <div id="addMiscChargeModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Add Miscellaneous Charge</h3>
+                    <button type="button" onclick="closeAddMiscChargeModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form method="POST" action="{{ route('students.misc-charges.store', $student) }}" class="space-y-4" id="add-misc-charge-form">
+                    @csrf
+                    
+                    <div>
+                        <x-input-label for="misc_label" value="Charge Label *" />
+                        <x-text-input id="misc_label" name="label" type="text" value="{{ old('label') }}" class="mt-1 block w-full" placeholder="e.g., Books, Uniform, Materials" required />
+                        <x-input-error :messages="$errors->get('label')" class="mt-2" />
+                    </div>
+                    
+                    <div>
+                        <x-input-label for="misc_amount" value="Amount (₹) *" />
+                        <x-text-input id="misc_amount" name="amount" type="number" step="0.01" min="0.01" value="{{ old('amount') }}" class="mt-1 block w-full" required />
+                        <x-input-error :messages="$errors->get('amount')" class="mt-2" />
+                    </div>
+                    
+                    <div>
+                        <x-input-label for="misc_due_date" value="Due Date" />
+                        <x-text-input id="misc_due_date" name="due_date" type="date" value="{{ old('due_date') }}" min="{{ now()->toDateString() }}" class="mt-1 block w-full" />
+                        <p class="mt-1 text-xs text-gray-500">Leave empty if no specific due date</p>
+                        <x-input-error :messages="$errors->get('due_date')" class="mt-2" />
+                    </div>
+                    
+                    <div class="flex items-center justify-end gap-3 pt-4 border-t">
+                        <button type="button" onclick="closeAddMiscChargeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                        <x-primary-button>Add Charge</x-primary-button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Penalty Modal -->
+    <div id="addPenaltyModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Add Manual Penalty</h3>
+                    <button type="button" onclick="closeAddPenaltyModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form method="POST" action="{{ route('students.penalties.store', $student) }}" class="space-y-4" id="add-penalty-form">
+                    @csrf
+                    
+                    <!-- Type of Penalty at the top -->
+                    <div>
+                        <x-input-label for="penalty_type_name" value="Type of Penalty *" />
+                        <x-text-input id="penalty_type_name" name="penalty_type_name" type="text" value="{{ old('penalty_type_name') }}" class="mt-1 block w-full" placeholder="e.g., Late Payment, Absence, etc." required />
+                        <x-input-error :messages="$errors->get('penalty_type_name')" class="mt-2" />
+                        <p class="mt-1 text-sm text-gray-500">This will be displayed as a tag/badge when recording payment.</p>
+                    </div>
+                    
+                    <div>
+                        <x-input-label for="penalty_amount_input" value="Penalty Amount (₹) *" />
+                        <x-text-input id="penalty_amount_input" name="penalty_amount" type="number" step="0.01" min="0.01" value="{{ old('penalty_amount') }}" class="mt-1 block w-full" required />
+                        <x-input-error :messages="$errors->get('penalty_amount')" class="mt-2" />
+                    </div>
+                    
+                    <div class="flex items-center justify-end gap-3 pt-4 border-t">
+                        <button type="button" onclick="closeAddPenaltyModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                        <x-primary-button>Add Penalty</x-primary-button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openAddMiscChargeModal() {
+            document.getElementById('addMiscChargeModal').classList.remove('hidden');
+        }
+        
+        function closeAddMiscChargeModal() {
+            document.getElementById('addMiscChargeModal').classList.add('hidden');
+        }
+        
+        function openAddPenaltyModal() {
+            document.getElementById('addPenaltyModal').classList.remove('hidden');
+        }
+        
+        function closeAddPenaltyModal() {
+            document.getElementById('addPenaltyModal').classList.add('hidden');
+        }
+        
+        // Close modals when clicking outside
+        document.getElementById('addMiscChargeModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddMiscChargeModal();
+            }
+        });
+        
+        document.getElementById('addPenaltyModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddPenaltyModal();
+            }
+        });
+
+        // Reload page after successful form submission to refresh the dropdowns
+        document.getElementById('add-misc-charge-form')?.addEventListener('submit', function(e) {
+            // Let the form submit normally, page will reload on success
+        });
+        
+        document.getElementById('add-penalty-form')?.addEventListener('submit', function(e) {
+            // Let the form submit normally, page will reload on success
+        });
+    </script>
 </x-app-layout>

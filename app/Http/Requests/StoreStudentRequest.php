@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -128,6 +129,57 @@ class StoreStudentRequest extends FormRequest
 
             if ($this->input('payment_mode') === 'full' && $installments->count() !== 1) {
                 $validator->errors()->add('installments', 'Full payment mode should have exactly one installment.');
+            }
+            
+            // Validate installment due dates are not in the past and are in chronological order
+            $today = now()->startOfDay();
+            $previousDueDate = null;
+            
+            // Validate in the order they are submitted (not sorted) to maintain correct index references
+            foreach ($installments as $index => $installment) {
+                if (!empty($installment['due_date'])) {
+                    try {
+                        $dueDate = Carbon::parse($installment['due_date'])->startOfDay();
+                        
+                        // Check if due date is in the past
+                        if ($dueDate->lt($today)) {
+                            $validator->errors()->add(
+                                "installments.{$index}.due_date",
+                                "Installment due date cannot be in the past. Please select today or a future date."
+                            );
+                        }
+                        
+                        // Check if this installment's due date is before or equal to the previous one
+                        if ($previousDueDate !== null && $dueDate->lte($previousDueDate)) {
+                            $validator->errors()->add(
+                                "installments.{$index}.due_date",
+                                "Each installment due date must be after the previous installment's due date."
+                            );
+                        }
+                        
+                        $previousDueDate = $dueDate;
+                    } catch (\Exception $e) {
+                        // Invalid date format, skip
+                    }
+                }
+            }
+            
+            // Validate misc charge due dates are not in the past
+            $miscCharges = collect($this->input('misc_charges', []));
+            foreach ($miscCharges as $index => $charge) {
+                if (!empty($charge['due_date'])) {
+                    try {
+                        $dueDate = Carbon::parse($charge['due_date'])->startOfDay();
+                        if ($dueDate->lt($today)) {
+                            $validator->errors()->add(
+                                "misc_charges.{$index}.due_date",
+                                "Miscellaneous charge due date cannot be in the past. Please select today or a future date."
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        // Invalid date format, skip
+                    }
+                }
             }
         });
     }

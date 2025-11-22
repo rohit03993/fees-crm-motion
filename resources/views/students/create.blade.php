@@ -590,6 +590,67 @@
                 }
             };
 
+            // Function to get minimum date for an installment based on previous installments
+            const getMinDateForInstallment = (currentRowIndex) => {
+                const today = '{{ $today }}';
+                const rows = Array.from(rowsContainer.querySelectorAll('.installment-row'));
+                
+                // If it's the first installment, min is today
+                if (currentRowIndex === 0) {
+                    return today;
+                }
+                
+                // Find the latest due date from previous installments
+                let latestPreviousDate = today;
+                for (let i = 0; i < currentRowIndex; i++) {
+                    const prevRow = rows[i];
+                    if (prevRow) {
+                        const prevDateInput = prevRow.querySelector('input[data-field="due_date"]');
+                        if (prevDateInput && prevDateInput.value) {
+                            const prevDateValue = prevDateInput.value;
+                            // If this previous date is later than our current latest, update it
+                            if (prevDateValue > latestPreviousDate) {
+                                latestPreviousDate = prevDateValue;
+                            }
+                        }
+                    }
+                }
+                
+                // Return the day after the latest previous installment, or today, whichever is later
+                if (latestPreviousDate > today) {
+                    const prevDate = new Date(latestPreviousDate + 'T00:00:00');
+                    prevDate.setDate(prevDate.getDate() + 1);
+                    const nextDay = prevDate.toISOString().split('T')[0];
+                    return nextDay > today ? nextDay : today;
+                }
+                
+                return today;
+            };
+            
+            // Function to update min dates for all installments
+            const updateInstallmentMinDates = () => {
+                const rows = Array.from(rowsContainer.querySelectorAll('.installment-row'));
+                const today = '{{ $today }}';
+                
+                rows.forEach((row, index) => {
+                    const dueDateInput = row.querySelector('input[data-field="due_date"]');
+                    if (dueDateInput) {
+                        const minDate = getMinDateForInstallment(index);
+                        const oldMin = dueDateInput.getAttribute('min');
+                        dueDateInput.setAttribute('min', minDate);
+                        
+                        // If current value is before min date, clear it and show alert
+                        if (dueDateInput.value && dueDateInput.value < minDate) {
+                            dueDateInput.value = '';
+                            // Only show alert if user is actively changing, not on initial load
+                            if (oldMin !== null && oldMin !== minDate) {
+                                alert(`Installment ${index + 1} due date must be after ${minDate}. Please select a valid date.`);
+                            }
+                        }
+                    }
+                });
+            };
+
             const reindexRows = () => {
                 const rows = rowsContainer.querySelectorAll('.installment-row');
                 rows.forEach((row, index) => {
@@ -598,6 +659,9 @@
                     row.querySelector('input[data-field="due_date"]').name = `installments[${index}][due_date]`;
                     row.querySelector('input[data-field="amount"]').name = `installments[${index}][amount]`;
                 });
+
+                // Update min dates after reindexing
+                updateInstallmentMinDates();
 
                 if (!rows.length) {
                     showEmptyState();
@@ -684,15 +748,19 @@
                 // Use provided amount or empty
                 const amountToFill = data.amount ?? '';
                 
+                // Get the current row index before adding
+                const currentIndex = rowsContainer.querySelectorAll('.installment-row').length;
+                const minDate = getMinDateForInstallment(currentIndex);
+                
                 row.innerHTML = `
-                    <td class="px-4 py-2 font-semibold text-gray-700 installment-index"></td>
-                    <td class="px-4 py-2">
-                        <input type="date" data-field="due_date" value="${data.due_date ?? ''}" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                    <td class="px-4 py-2 font-semibold text-gray-700 installment-index align-top"></td>
+                    <td class="px-4 py-2 align-top">
+                        <input type="date" data-field="due_date" value="${data.due_date ?? ''}" min="${minDate}" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3">
                     </td>
-                    <td class="px-4 py-2">
-                        <input type="number" min="0" step="0.01" data-field="amount" value="${amountToFill}" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                    <td class="px-4 py-2 align-top">
+                        <input type="number" min="0" step="0.01" data-field="amount" value="${amountToFill}" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3">
                     </td>
-                    <td class="px-4 py-2 text-right">
+                    <td class="px-4 py-2 text-right align-top">
                         <button type="button" class="text-xs font-semibold text-red-500 remove-installment">Remove</button>
                     </td>
                 `;
@@ -712,10 +780,12 @@
                     });
                 }
                 
-                // Update remaining when date is selected
+                // Update remaining and min dates when date is selected
                 if (dueDateInput) {
                     dueDateInput.addEventListener('change', function() {
                         updateRemainingAmount();
+                        // Update min dates for subsequent installments
+                        updateInstallmentMinDates();
                     });
                 }
                 
@@ -723,11 +793,13 @@
                     row.remove();
                     reindexRows();
                     updateRemainingAmount();
+                    updateInstallmentMinDates(); // Update min dates after removal
                     hideScheduleIfEmpty();
                 });
                 
                 rowsContainer.appendChild(row);
                 reindexRows();
+                updateInstallmentMinDates(); // Set min dates after adding
                 updateRemainingAmount(); // Calculate remaining after adding row
             };
 
@@ -768,8 +840,9 @@
                     due_date: item.due_date || '',
                     amount: item.amount || ''
                 }, false));
-                // Update remaining amount after loading old installments
+                // Update remaining amount and min dates after loading old installments
                 updateRemainingAmount();
+                updateInstallmentMinDates();
             } else {
                 // Initialize based on default mode
                 if (defaultMode === 'installments') {
@@ -824,7 +897,6 @@
                     if (selectDropdown) {
                         const currentValue = selectDropdown.value;
                         selectDropdown.innerHTML = `
-                            <option value="">-- Select Pre-defined Charge --</option>
                             <option value="__custom__">-- Enter Custom Charge --</option>
                             ${availableCharges.map(charge => 
                                 `<option value="${charge.id}" ${charge.id == currentValue ? 'selected' : ''}>
@@ -872,6 +944,8 @@
 
             const reindexMiscChargeRows = () => {
                 const rows = miscChargeRowsContainer.querySelectorAll('.misc-charge-row');
+                const today = '{{ $today }}';
+                
                 rows.forEach((row, index) => {
                     row.dataset.index = index;
                     row.querySelector('.misc-charge-index').textContent = index + 1;
@@ -881,7 +955,15 @@
                     
                     if (labelInput) labelInput.name = `misc_charges[${index}][label]`;
                     if (amountInput) amountInput.name = `misc_charges[${index}][amount]`;
-                    if (dueDateInput) dueDateInput.name = `misc_charges[${index}][due_date]`;
+                    if (dueDateInput) {
+                        dueDateInput.name = `misc_charges[${index}][due_date]`;
+                        // Ensure min date is set to today
+                        dueDateInput.setAttribute('min', today);
+                        // If current value is before today, clear it
+                        if (dueDateInput.value && dueDateInput.value < today) {
+                            dueDateInput.value = '';
+                        }
+                    }
                 });
 
                 if (!rows.length) {
@@ -909,9 +991,8 @@
                 const row = document.createElement('tr');
                 row.className = 'bg-white misc-charge-row';
                 
-                // Build dropdown options
+                // Build dropdown options - removed "Select Pre-defined Charge" option
                 const dropdownOptions = `
-                    <option value="">-- Select Pre-defined Charge --</option>
                     <option value="__custom__" ${!data.predefinedChargeId && data.label ? 'selected' : ''}>-- Enter Custom Charge --</option>
                     ${availableCharges.map(charge => 
                         `<option value="${charge.id}" ${data.predefinedChargeId == charge.id ? 'selected' : ''}>
@@ -920,21 +1001,30 @@
                     ).join('')}
                 `;
                 
+                // Determine initial state - show dropdown if predefined charge is selected, otherwise show text input
+                // Default to showing text input (custom charge) when no data is provided
+                const hasPredefinedCharge = data.predefinedChargeId && data.predefinedChargeId !== '__custom__' && data.predefinedChargeId !== '';
+                const showDropdown = hasPredefinedCharge;
+                const showTextInput = !hasPredefinedCharge;
+                
                 row.innerHTML = `
-                    <td class="px-4 py-2 font-semibold text-gray-700 misc-charge-index"></td>
-                    <td class="px-4 py-2 space-y-2">
-                        <select data-field="charge-select" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                    <td class="px-4 py-2 font-semibold text-gray-700 misc-charge-index align-top"></td>
+                    <td class="px-4 py-2 align-top">
+                        <select data-field="charge-select" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3 ${showTextInput ? 'hidden' : ''}">
                             ${dropdownOptions}
                         </select>
-                        <input type="text" data-field="label" value="${data.label ?? ''}" placeholder="e.g., Books, Uniform, Materials" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 ${data.predefinedChargeId ? 'hidden' : ''}">
+                        <div class="relative ${showDropdown ? 'hidden' : ''}">
+                            <input type="text" data-field="label" value="${data.label ?? ''}" placeholder="e.g., Books, Uniform, Materials" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3 pr-20">
+                            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-600 hover:text-indigo-700 font-medium switch-to-dropdown" title="Select from predefined charges">Select</button>
+                        </div>
                     </td>
-                    <td class="px-4 py-2">
-                        <input type="number" min="0" step="0.01" data-field="amount" value="${data.amount ?? ''}" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                    <td class="px-4 py-2 align-top">
+                        <input type="number" min="0" step="0.01" data-field="amount" value="${data.amount ?? ''}" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3">
                     </td>
-                    <td class="px-4 py-2">
-                        <input type="date" data-field="due_date" value="${data.due_date ?? ''}" class="mt-1 block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                    <td class="px-4 py-2 align-top">
+                        <input type="date" data-field="due_date" value="${data.due_date ?? ''}" min="{{ $today }}" class="block w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2 px-3">
                     </td>
-                    <td class="px-4 py-2 text-right">
+                    <td class="px-4 py-2 text-right align-top">
                         <button type="button" class="text-xs font-semibold text-red-500 remove-misc-charge">Remove</button>
                     </td>
                 `;
@@ -942,28 +1032,79 @@
                 // Handle dropdown change
                 const selectDropdown = row.querySelector('select[data-field="charge-select"]');
                 const labelInput = row.querySelector('input[data-field="label"]');
+                const labelInputWrapper = labelInput ? labelInput.closest('div.relative') : null;
+                const switchButton = row.querySelector('.switch-to-dropdown');
                 const amountInput = row.querySelector('input[data-field="amount"]');
                 const dueDateInput = row.querySelector('input[data-field="due_date"]');
                 
+                // Function to switch to dropdown view
+                const switchToDropdown = () => {
+                    if (selectDropdown && labelInputWrapper) {
+                        selectDropdown.classList.remove('hidden');
+                        labelInputWrapper.classList.add('hidden');
+                        // Clear the current selection so user can choose from dropdown
+                        // Don't set to '__custom__' as it will trigger change event
+                        if (availableCharges.length > 0) {
+                            selectDropdown.value = availableCharges[0].id;
+                            // Trigger the change manually to populate fields
+                            selectDropdown.dispatchEvent(new Event('change'));
+                        } else {
+                            selectDropdown.value = '';
+                        }
+                    }
+                };
+                
+                // Function to switch to text input view
+                const switchToTextInput = () => {
+                    if (selectDropdown && labelInputWrapper) {
+                        selectDropdown.classList.add('hidden');
+                        labelInputWrapper.classList.remove('hidden');
+                        labelInput.value = '';
+                        amountInput.value = '';
+                        dueDateInput.value = '';
+                    }
+                };
+                
                 if (selectDropdown) {
                     selectDropdown.addEventListener('change', function() {
-                        if (this.value === '__custom__' || this.value === '') {
-                            // Show label input for custom entry
-                            labelInput.classList.remove('hidden');
-                            labelInput.value = '';
-                            amountInput.value = '';
-                            dueDateInput.value = '';
+                        const today = '{{ $today }}';
+                        
+                        if (this.value === '__custom__') {
+                            // Show text input, hide dropdown for custom entry
+                            switchToTextInput();
                         } else if (this.value) {
-                            // Hide label input and populate from selected charge
-                            labelInput.classList.add('hidden');
+                            // Show dropdown, hide text input and populate from selected charge
+                            if (labelInputWrapper) labelInputWrapper.classList.add('hidden');
+                            selectDropdown.classList.remove('hidden');
                             const selectedCharge = availableCharges.find(c => c.id == this.value);
                             if (selectedCharge) {
                                 labelInput.value = selectedCharge.label;
                                 amountInput.value = selectedCharge.amount;
-                                if (selectedCharge.due_date) {
+                                if (selectedCharge.due_date && selectedCharge.due_date >= today) {
                                     dueDateInput.value = selectedCharge.due_date;
+                                } else {
+                                    dueDateInput.value = '';
                                 }
                             }
+                        }
+                    });
+                }
+                
+                // Handle switch button click
+                if (switchButton) {
+                    switchButton.addEventListener('click', switchToDropdown);
+                }
+                
+                // Ensure min date is always set to today for misc charge due dates
+                if (dueDateInput) {
+                    const today = '{{ $today }}';
+                    dueDateInput.setAttribute('min', today);
+                    
+                    // Validate on change
+                    dueDateInput.addEventListener('change', function() {
+                        if (this.value && this.value < today) {
+                            alert('Due date cannot be in the past. Please select today or a future date.');
+                            this.value = '';
                         }
                     });
                 }
@@ -996,3 +1137,4 @@
         });
     </script>
 </x-app-layout>
+

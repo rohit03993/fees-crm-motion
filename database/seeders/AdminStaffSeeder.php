@@ -15,6 +15,7 @@ class AdminStaffSeeder extends Seeder
             [
                 'name' => 'Super Admin',
                 'password' => Hash::make('Admin@123'),
+                'display_password' => 'Admin@123',
                 'role' => 'admin',
                 'staff_id' => 'ADM-0001',
                 'is_active' => true,
@@ -26,6 +27,7 @@ class AdminStaffSeeder extends Seeder
             [
                 'name' => 'Tanisha (Staff)',
                 'password' => Hash::make('Staff@123'),
+                'display_password' => 'Staff@123',
                 'role' => 'staff',
                 'staff_id' => 'STF-0001',
                 'is_active' => true,

@@ -40,6 +40,9 @@
                         <x-nav-link :href="route('discounts.index')" :active="request()->routeIs('discounts.*')">
                             Discounts
                         </x-nav-link>
+                        <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                            Staff
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -84,6 +87,9 @@
                         </x-dropdown-link>
                         <x-dropdown-link :href="route('discounts.index')">
                             Discounts
+                        </x-dropdown-link>
+                        <x-dropdown-link :href="route('users.index')">
+                            Staff
                         </x-dropdown-link>
                     @endif
 
@@ -144,6 +150,9 @@
                 <x-responsive-nav-link :href="route('discounts.index')" :active="request()->routeIs('discounts.*')">
                     Discounts
                 </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                    Staff
+                </x-responsive-nav-link>
             @endif
         </div>
 
@@ -179,6 +188,9 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('discounts.index')">
                         Discounts
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('users.index')">
+                        Staff
                     </x-responsive-nav-link>
                 @endif
 

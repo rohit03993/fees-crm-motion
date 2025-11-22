@@ -20,7 +20,17 @@ class StudentPolicy
      */
     public function view(User $user, Student $student): bool
     {
-        return $user->isStaff() || $user->isAdmin();
+        // Admin can view all students
+        if ($user->isAdmin()) {
+            return true;
+        }
+        
+        // Staff can only view students they created
+        if ($user->isStaff()) {
+            return $student->created_by === $user->id;
+        }
+        
+        return false;
     }
 
     /**
